@@ -11,16 +11,16 @@ interface MetronomeDisplayProps {
   onToggleSettings: () => void;
 }
 
-// Farbkonfiguration für Akzente
+// Knallige Farbkonfiguration für Akzente
 const ACCENT_COLORS: Record<AccentColor, { bg: string; border: string; shadow: string }> = {
-  red: { bg: 'bg-red-500', border: 'border-red-500', shadow: 'shadow-red-500/50' },
-  blue: { bg: 'bg-blue-500', border: 'border-blue-500', shadow: 'shadow-blue-500/50' },
-  green: { bg: 'bg-green-500', border: 'border-green-500', shadow: 'shadow-green-500/50' },
-  yellow: { bg: 'bg-yellow-500', border: 'border-yellow-500', shadow: 'shadow-yellow-500/50' },
-  purple: { bg: 'bg-purple-500', border: 'border-purple-500', shadow: 'shadow-purple-500/50' },
-  orange: { bg: 'bg-orange-500', border: 'border-orange-500', shadow: 'shadow-orange-500/50' },
-  pink: { bg: 'bg-pink-500', border: 'border-pink-500', shadow: 'shadow-pink-500/50' },
-  cyan: { bg: 'bg-cyan-500', border: 'border-cyan-500', shadow: 'shadow-cyan-500/50' },
+  red: { bg: 'bg-red-400', border: 'border-red-400', shadow: 'shadow-red-400/60' },
+  blue: { bg: 'bg-blue-400', border: 'border-blue-400', shadow: 'shadow-blue-400/60' },
+  green: { bg: 'bg-green-400', border: 'border-green-400', shadow: 'shadow-green-400/60' },
+  yellow: { bg: 'bg-yellow-300', border: 'border-yellow-300', shadow: 'shadow-yellow-300/60' },
+  purple: { bg: 'bg-purple-400', border: 'border-purple-400', shadow: 'shadow-purple-400/60' },
+  orange: { bg: 'bg-orange-400', border: 'border-orange-400', shadow: 'shadow-orange-400/60' },
+  pink: { bg: 'bg-pink-400', border: 'border-pink-400', shadow: 'shadow-pink-400/60' },
+  cyan: { bg: 'bg-cyan-400', border: 'border-cyan-400', shadow: 'shadow-cyan-400/60' },
 };
 
 export default function MetronomeDisplay({ state, onBeatClick, onColorChange, showSettings, onToggleSettings }: MetronomeDisplayProps) {
@@ -200,15 +200,7 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
         </div>
       </div>
 
-      {/* Current Position Display */}
-      <div className="text-center">
-        <div className="text-3xl font-mono font-bold text-white">
-          {currentBeat}.{currentSubdivision}
-        </div>
-        <div className="text-sm text-white/60 mt-1">
-          Beat • Subdivision
-        </div>
-      </div>
+
     </div>
   );
 }
