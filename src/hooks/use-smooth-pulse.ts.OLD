@@ -30,32 +30,36 @@ export function useSmoothPulse({
         cancelAnimationFrame(animationFrameRef.current);
       }
       setOpacity(maxOpacity);
+      startTimeRef.current = undefined;
       return;
     }
 
     const animate = (timestamp: number) => {
       if (!startTimeRef.current) {
         startTimeRef.current = timestamp;
+        setOpacity(maxOpacity); // CRITICAL: Immediate full opacity on beat start
       }
 
       const elapsed = timestamp - startTimeRef.current;
       const progress = (elapsed % duration) / duration;
 
+      // CRITICAL: Faster, more responsive animation curve
       let currentProgress: number;
-      if (progress <= 0.5) {
-        // First half: fade out
-        currentProgress = progress * 2;
-        isIncreasingRef.current = false;
+      if (progress <= 0.3) {
+        // First 30%: stay at max opacity (stronger beat indication)
+        currentProgress = 0;
+      } else if (progress <= 0.7) {
+        // Next 40%: fade out quickly
+        currentProgress = (progress - 0.3) / 0.4;
       } else {
-        // Second half: fade in
-        currentProgress = (1 - progress) * 2;
-        isIncreasingRef.current = true;
+        // Final 30%: fade back in
+        currentProgress = 1 - ((progress - 0.7) / 0.3);
       }
 
-      // Smooth easing function (ease-in-out)
+      // Sharp easing for immediate visual feedback
       const eased = currentProgress < 0.5 
-        ? 2 * currentProgress * currentProgress
-        : 1 - Math.pow(-2 * currentProgress + 2, 2) / 2;
+        ? 4 * currentProgress * currentProgress * currentProgress
+        : 1 - Math.pow(-2 * currentProgress + 2, 3) / 2;
 
       const newOpacity = minOpacity + (maxOpacity - minOpacity) * (1 - eased);
       setOpacity(newOpacity);

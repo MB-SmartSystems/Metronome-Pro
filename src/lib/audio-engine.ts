@@ -1,403 +1,274 @@
-import { AudioConfig, AudioBufferPool, SoundLevel } from '@/types/metronome';
+import * as Tone from 'tone';
+import { SoundLevel } from '@/types/metronome';
 
 export class AudioEngine {
-  private audioContext: AudioContext;
-  private bufferPool: AudioBufferPool | null = null;
-  private config: AudioConfig;
+  private synths: Map<SoundLevel, Tone.Oscillator> = new Map();
+  private reverb: Tone.Reverb;
+  private compressor: Tone.Compressor;
+  private gainNode: Tone.Gain;
+  private isInitialized = false;
   private isWarmedUp = false;
-  private activeSources: Set<AudioBufferSourceNode> = new Set();
-  private masterGain: GainNode;
-  private retryCount = 0;
-  private maxRetries = 5;
-  private retryDelay = 100; // Start with 100ms
   
+  // Tone.js optimized sound definitions
+  private soundConfig = {
+    accent: { frequency: 1000, gain: 0.8, attack: 0.001, decay: 0.08, release: 0.01 },
+    normal: { frequency: 800, gain: 0.6, attack: 0.001, decay: 0.06, release: 0.01 },
+    subdivision: { frequency: 600, gain: 0.3, attack: 0.001, decay: 0.04, release: 0.01 }
+  };
+
   constructor() {
-    // Device-specific optimizations
-    const isSamsungHighEnd = /Android.*SM-S9\d\d/i.test(navigator.userAgent);
-    const isHighEndDevice = /Android.*SM-S|iPhone1[3-9]|iPhone[2-9]/i.test(navigator.userAgent);
+    // Initialize Tone.js audio chain
+    this.reverb = new Tone.Reverb({
+      decay: 0.1,
+      wet: 0.1
+    });
     
-    // Chrome 119+ optimization detection
-    const isAndroidChrome119Plus = this.detectChromeVersion() >= 119 && /Android/i.test(navigator.userAgent);
-    const isChromeLatest = isAndroidChrome119Plus && this.detectChromeVersion() >= 125;
+    this.compressor = new Tone.Compressor({
+      threshold: -12,
+      ratio: 3,
+      attack: 0.003,
+      release: 0.01
+    });
     
-    this.config = {
-      sampleRate: 44100,
-      bufferSize: this.getOptimalBufferSize(isSamsungHighEnd, isHighEndDevice, isAndroidChrome119Plus),
-      lookaheadTime: this.getOptimalLookahead(isSamsungHighEnd, isHighEndDevice, isAndroidChrome119Plus),
-      scheduleInterval: this.getOptimalScheduleInterval(isSamsungHighEnd, isHighEndDevice, isAndroidChrome119Plus)
-    };
+    this.gainNode = new Tone.Gain(0.8);
     
-    // Create AudioContext with enhanced settings for Chrome 119+
-    const contextOptions: AudioContextOptions = {
-      sampleRate: this.config.sampleRate,
-      latencyHint: isAndroidChrome119Plus ? 'playback' : 'interactive', // Chrome 119+ optimizes playback hint better
-    };
-    
-    // Chrome 125+ supports additional optimization hints
-    if (isChromeLatest && 'AudioContext' in window) {
-      // Enable advanced Chrome features when available
-      try {
-        this.audioContext = new AudioContext({
-          ...contextOptions,
-          // @ts-expect-error - Future Chrome features not in types yet
-          renderQuantumSize: 32, // Smaller quantum for Chrome 125+
-          latencyHint: 'balanced',
-        });
-      } catch {
-        // Fallback to standard options
-        this.audioContext = new AudioContext(contextOptions);
-      }
-    } else {
-      this.audioContext = new AudioContext(contextOptions);
-    }
-
-    // Create master gain node for volume control and cleanup
-    this.masterGain = this.audioContext.createGain();
-    this.masterGain.gain.value = 1.0;
-    this.masterGain.connect(this.audioContext.destination);
-  }
-
-  private detectChromeVersion(): number {
-    const match = navigator.userAgent.match(/Chrome\/(\d+)/);
-    return match ? parseInt(match[1], 10) : 0;
-  }
-
-  private getOptimalBufferSize(isSamsungHighEnd: boolean, isHighEndDevice: boolean, isChrome119Plus: boolean): number {
-    if (isChrome119Plus) {
-      // Chrome 119+ has optimized audio processing pipeline
-      return isSamsungHighEnd ? 64 : (isHighEndDevice ? 128 : 256);
-    }
-    return isSamsungHighEnd ? 128 : (isHighEndDevice ? 256 : 512);
-  }
-
-  private getOptimalLookahead(isSamsungHighEnd: boolean, isHighEndDevice: boolean, isChrome119Plus: boolean): number {
-    if (isChrome119Plus) {
-      // Chrome 119+ has better scheduling precision
-      return isSamsungHighEnd ? 0.008 : (isHighEndDevice ? 0.010 : 0.012);
-    }
-    return isSamsungHighEnd ? 0.010 : (isHighEndDevice ? 0.012 : 0.015);
-  }
-
-  private getOptimalScheduleInterval(isSamsungHighEnd: boolean, isHighEndDevice: boolean, isChrome119Plus: boolean): number {
-    if (isChrome119Plus) {
-      // Chrome 119+ can handle tighter scheduling
-      return isSamsungHighEnd ? 0.004 : (isHighEndDevice ? 0.005 : 0.006);
-    }
-    return isSamsungHighEnd ? 0.006 : (isHighEndDevice ? 0.008 : 0.010);
+    // Connect effects chain: compressor -> reverb -> gain -> destination
+    this.compressor.connect(this.reverb);
+    this.reverb.connect(this.gainNode);
+    this.gainNode.toDestination();
   }
 
   async initialize(): Promise<void> {
-    return this.initializeWithRetry();
+    if (this.isInitialized) return;
+
+    try {
+      // Start Tone.js audio context
+      await Tone.start();
+      
+      // Optimize Tone.js for low latency
+      Tone.getContext().lookAhead = 0.01; // 10ms lookahead
+      Tone.getContext().latencyHint = "interactive";
+      
+      // Create optimized oscillators for each sound level
+      this.createSynths();
+      
+      // Warm up the audio pipeline
+      await this.warmUpAudioPipeline();
+      
+      this.isInitialized = true;
+      this.isWarmedUp = true;
+      
+      console.log('🎵 Tone.js Audio Engine initialized', {
+        context: Tone.getContext().state,
+        sampleRate: Tone.getContext().sampleRate,
+        baseLatency: Tone.getContext().baseLatency,
+        lookAhead: Tone.getContext().lookAhead
+      });
+      
+    } catch (error) {
+      console.error('Audio Engine initialization failed:', error);
+      throw error;
+    }
   }
 
-  private async initializeWithRetry(): Promise<void> {
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      try {
-        // Force AudioContext to ready state
-        if (this.audioContext.state === 'suspended') {
-          await this.audioContext.resume();
-        }
-        
-        // Create audio buffer pool
-        this.bufferPool = await this.createAudioBuffers();
-        
-        // CRITICAL: Warm up audio pipeline
-        await this.warmUpAudioPipeline();
-        
-        this.isWarmedUp = true;
-        this.retryCount = 0; // Reset on success
-        return;
-        
-      } catch (error) {
-        console.warn(`Audio initialization attempt ${attempt + 1} failed:`, error);
-        
-        if (attempt === this.maxRetries) {
-          throw new Error(`Audio initialization failed after ${this.maxRetries + 1} attempts: ${error}`);
-        }
-        
-        // Exponential backoff with jitter
-        const delay = this.retryDelay * Math.pow(2, attempt) + Math.random() * 100;
-        await new Promise(resolve => setTimeout(resolve, delay));
-        
-        // Try to recreate AudioContext if necessary
-        if (this.audioContext.state === 'closed') {
-          this.audioContext = new AudioContext({
-            sampleRate: this.config.sampleRate,
-            latencyHint: 'interactive',
-          });
-          
-          // Recreate master gain
-          this.masterGain = this.audioContext.createGain();
-          this.masterGain.gain.value = 1.0;
-          this.masterGain.connect(this.audioContext.destination);
-        }
-      }
-    }
+  private createSynths(): void {
+    // Create dedicated synths for each sound level with optimal settings
+    Object.entries(this.soundConfig).forEach(([soundLevel, config]) => {
+      const synth = new Tone.Oscillator({
+        frequency: config.frequency,
+        type: "sine"
+      });
+      
+      // Create envelope for clean attack/decay
+      const envelope = new Tone.AmplitudeEnvelope({
+        attack: config.attack,
+        decay: config.decay,
+        sustain: 0,
+        release: config.release
+      });
+      
+      const synthGain = new Tone.Gain(config.gain);
+      
+      // Connect: oscillator -> envelope -> gain -> effects chain
+      synth.connect(envelope);
+      envelope.connect(synthGain);
+      synthGain.connect(this.compressor);
+      
+      // Store references for triggering
+      this.synths.set(soundLevel as SoundLevel, synth);
+    });
   }
 
   private async warmUpAudioPipeline(): Promise<void> {
-    if (!this.bufferPool) return;
+    // Warm up by playing silent sounds to prepare the audio pipeline
+    const warmupPromises: Promise<void>[] = [];
     
-    try {
-      // Play multiple silent sounds to prime the entire audio pipeline
-      const silentBuffer = this.createSilentBuffer(0.001);
-      
-      for (let i = 0; i < 5; i++) {
-        const source = this.audioContext.createBufferSource();
-        const gainNode = this.audioContext.createGain();
+    this.synths.forEach((synth) => {
+      const warmupPromise = new Promise<void>((resolve) => {
+        // Start oscillator
+        synth.start();
         
-        source.buffer = silentBuffer;
-        gainNode.gain.value = 0; // Silent
-        
-        source.connect(gainNode);
-        gainNode.connect(this.masterGain);
-        
-        const startTime = this.audioContext.currentTime + (i * 0.005); // 5ms apart
-        source.start(startTime);
-        
-        // Auto cleanup
-        source.onended = () => {
-          try {
-            gainNode.disconnect();
-          } catch (_e) {
-            // Already disconnected
-          }
-        };
-        
-        if (i < 4) {
-          await new Promise(resolve => setTimeout(resolve, 5));
+        // Trigger silent envelope
+        const envelope = synth.output as Tone.AmplitudeEnvelope;
+        if (envelope && envelope.triggerAttackRelease) {
+          envelope.triggerAttackRelease(0.001, "+0");
         }
-      }
+        
+        setTimeout(resolve, 10);
+      });
       
-      // Wait for warm-up completion
-      await new Promise(resolve => setTimeout(resolve, 100));
-    } catch (error) {
-      console.error('Audio pipeline warm-up failed:', error);
-    }
-  }
-
-  private createSilentBuffer(duration: number): AudioBuffer {
-    const frameCount = duration * this.audioContext.sampleRate;
-    const buffer = this.audioContext.createBuffer(1, frameCount, this.audioContext.sampleRate);
-    // Buffer is already silent (zeros)
-    return buffer;
-  }
-
-  private async createAudioBuffers(): Promise<AudioBufferPool> {
-    const duration = 0.08; // 80ms buffers - shorter for cleaner sound
-    const sampleRate = this.audioContext.sampleRate;
-    const frameCount = duration * sampleRate;
-
-    return {
-      accent: this.createClickBuffer(frameCount, 1000, 0.9), // 1000Hz, loud and clear
-      normal: this.createClickBuffer(frameCount, 800, 0.7),  // 800Hz, normal volume  
-      subdivision: this.createClickBuffer(frameCount, 600, 0.4) // 600Hz, softer
-    };
-  }
-
-  private createClickBuffer(frameCount: number, frequency: number, gain: number): AudioBuffer {
-    const buffer = this.audioContext.createBuffer(1, frameCount, this.audioContext.sampleRate);
-    const channelData = buffer.getChannelData(0);
-    
-    const attackTime = 0.001; // 1ms sharp attack
-    const decayTime = 0.04;   // 40ms decay
-    const attackSamples = attackTime * this.audioContext.sampleRate;
-    const decayEnd = decayTime * this.audioContext.sampleRate;
-    
-    for (let i = 0; i < frameCount; i++) {
-      const t = i / this.audioContext.sampleRate;
-      let amplitude = gain;
-      
-      // Sharp envelope for precise click
-      if (i < attackSamples) {
-        amplitude *= i / attackSamples; // Linear attack
-      } else if (i < decayEnd) {
-        const decayProgress = (i - attackSamples) / (decayEnd - attackSamples);
-        amplitude *= Math.exp(-decayProgress * 6); // Fast exponential decay
-      } else {
-        amplitude = 0;
-      }
-      
-      // Clean sine wave with minimal harmonics
-      channelData[i] = amplitude * (
-        Math.sin(2 * Math.PI * frequency * t) + 
-        0.05 * Math.sin(2 * Math.PI * frequency * 2 * t) // Very subtle 2nd harmonic
-      );
-    }
-    
-    return buffer;
-  }
-
-  playSound(level: SoundLevel, time: number): AudioBufferSourceNode | null {
-    if (!this.bufferPool || !this.isWarmedUp) return null;
-    
-    const currentTime = this.audioContext.currentTime;
-    const scheduleTime = Math.max(time, currentTime);
-    
-    try {
-      const source = this.audioContext.createBufferSource();
-      source.buffer = this.bufferPool[level];
-      
-      // Individual gain control for each source
-      const gainNode = this.audioContext.createGain();
-      gainNode.gain.value = 1.0;
-      
-      // Connect: source -> gain -> master -> destination
-      source.connect(gainNode);
-      gainNode.connect(this.masterGain);
-      
-      // Track active source for cleanup
-      this.activeSources.add(source);
-      
-      // Auto-cleanup when source ends
-      source.onended = () => {
-        this.activeSources.delete(source);
-        try {
-          gainNode.disconnect();
-        } catch (_e) {
-          // Already disconnected
-        }
-      };
-      
-      // Start playback
-      source.start(scheduleTime);
-      
-      return source;
-      
-    } catch (error) {
-      console.error('Audio playback error:', error);
-      return null;
-    }
-  }
-
-  // CRITICAL: Immediately stop all audio sources
-  stopAllSounds(): void {
-    const sources = Array.from(this.activeSources);
-    this.activeSources.clear();
-    
-    sources.forEach(source => {
-      try {
-        source.stop();
-        source.disconnect();
-      } catch (_e) {
-        // Source may already be stopped/disconnected
-      }
+      warmupPromises.push(warmupPromise);
     });
     
-    // Additional cleanup - disconnect and reconnect master gain
+    await Promise.all(warmupPromises);
+    console.log('🎵 Audio pipeline warmed up');
+  }
+
+  playSound(level: SoundLevel, time?: number): boolean {
+    if (!this.isInitialized || !this.isWarmedUp) {
+      console.warn('Audio engine not ready');
+      return false;
+    }
+
     try {
-      this.masterGain.disconnect();
-      this.masterGain.connect(this.audioContext.destination);
-    } catch (_e) {
-      // Handle reconnection errors
-      console.error('Master gain reconnection error:', _e);
+      const config = this.soundConfig[level];
+      if (!config) return false;
+      
+      // Use Tone.js precise timing - convert to Tone time if provided
+      const toneTime = time ? Tone.Time(time).toSeconds() : "now";
+      
+      // Create a quick synth instance for this sound
+      const quickSynth = new Tone.FMSynth({
+        harmonicity: 1,
+        modulationIndex: 1,
+        envelope: {
+          attack: config.attack,
+          decay: config.decay,
+          sustain: 0,
+          release: config.release
+        },
+        modulation: {
+          type: "sine"
+        },
+        modulationEnvelope: {
+          attack: 0.001,
+          decay: 0.02,
+          sustain: 0,
+          release: 0.01
+        }
+      });
+      
+      const levelGain = new Tone.Gain(config.gain);
+      quickSynth.connect(levelGain);
+      levelGain.connect(this.compressor);
+      
+      // Trigger the sound with precise timing
+      quickSynth.triggerAttackRelease(
+        config.frequency,
+        config.decay + config.release,
+        toneTime
+      );
+      
+      // Clean up after sound completes
+      setTimeout(() => {
+        try {
+          levelGain.disconnect();
+          quickSynth.dispose();
+        } catch {
+          // Already disposed
+        }
+      }, (config.decay + config.release) * 1000 + 100);
+      
+      return true;
+      
+    } catch (error) {
+      console.error('Sound playback error:', error);
+      return false;
+    }
+  }
+
+  stopAllSounds(): void {
+    try {
+      // Stop all active sounds immediately
+      Tone.getDestination().volume.rampTo(-Infinity, 0.01);
+      
+      // Reset volume after brief silence
+      setTimeout(() => {
+        if (this.isInitialized) {
+          Tone.getDestination().volume.rampTo(0, 0.01);
+        }
+      }, 50);
+      
+    } catch (error) {
+      console.error('Stop all sounds error:', error);
     }
   }
 
   getCurrentTime(): number {
-    return this.audioContext.currentTime;
+    return Tone.now();
   }
 
   async ensureAudioReady(): Promise<boolean> {
     try {
-      // Resume if suspended
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
+      // Ensure Tone.js context is started
+      if (Tone.getContext().state !== 'running') {
+        await Tone.start();
       }
       
-      // Test on mobile devices
-      if (/Android|iOS/i.test(navigator.userAgent)) {
-        // Quick test to ensure audio pipeline is responsive
-        const testBuffer = this.createSilentBuffer(0.001);
-        const testSource = this.audioContext.createBufferSource();
-        const testGain = this.audioContext.createGain();
-        
-        testSource.buffer = testBuffer;
-        testGain.gain.value = 0;
-        
-        testSource.connect(testGain);
-        testGain.connect(this.masterGain);
-        
-        const testTime = this.audioContext.currentTime;
-        testSource.start(testTime);
-        testSource.stop(testTime + 0.001);
-        
-        // Small stabilization delay for mobile
-        await new Promise(resolve => setTimeout(resolve, 20));
-        
-        // Cleanup
-        try {
-          testGain.disconnect();
-        } catch (_e) {
-          // Already disconnected
-        }
+      // Check initialization
+      if (!this.isInitialized) {
+        await this.initialize();
       }
       
-      const isReady = this.audioContext.state === 'running' && this.isWarmedUp;
+      return this.isInitialized && this.isWarmedUp && Tone.getContext().state === 'running';
       
-      if (!isReady) {
-        console.warn('Audio not ready, attempting automatic recovery...', {
-          state: this.audioContext.state,
-          warmedUp: this.isWarmedUp
-        });
-        
-        // Attempt automatic recovery
-        try {
-          await this.initializeWithRetry();
-          return this.audioContext.state === 'running' && this.isWarmedUp;
-        } catch (recoveryError) {
-          console.error('Audio recovery failed:', recoveryError);
-          return false;
-        }
-      }
-      
-      return isReady;
     } catch (error) {
       console.error('Audio readiness check failed:', error);
-      // Try one automatic recovery attempt
-      try {
-        await this.initializeWithRetry();
-        return this.audioContext.state === 'running' && this.isWarmedUp;
-      } catch (recoveryError) {
-        console.error('Audio recovery failed:', recoveryError);
-        return false;
-      }
+      return false;
     }
   }
 
   getAudioInfo(): object {
+    const context = Tone.getContext();
     return {
-      state: this.audioContext.state,
-      sampleRate: this.audioContext.sampleRate,
-      baseLatency: this.audioContext.baseLatency || 'unknown',
-      outputLatency: this.audioContext.outputLatency || 'unknown',
-      currentTime: this.audioContext.currentTime,
+      state: context.state,
+      sampleRate: context.sampleRate,
+      baseLatency: context.baseLatency,
+      lookAhead: context.lookAhead,
+      currentTime: Tone.now(),
+      isInitialized: this.isInitialized,
       isWarmedUp: this.isWarmedUp,
-      activeSources: this.activeSources.size,
-      userAgent: navigator.userAgent,
-      config: this.config
+      toneVersion: Tone.version
     };
   }
 
   destroy(): void {
-    // Stop all active sources
-    this.stopAllSounds();
-    
-    // Disconnect master gain
     try {
-      this.masterGain.disconnect();
-    } catch (_e) {
-      // Already disconnected
+      // Stop all sounds
+      this.stopAllSounds();
+      
+      // Dispose of all synths
+      this.synths.forEach(synth => {
+        try {
+          synth.dispose();
+        } catch {
+          // Already disposed
+        }
+      });
+      this.synths.clear();
+      
+      // Dispose of effects
+      this.reverb.dispose();
+      this.compressor.dispose();
+      this.gainNode.dispose();
+      
+      this.isInitialized = false;
+      this.isWarmedUp = false;
+      
+      console.log('🎵 Tone.js Audio Engine destroyed');
+      
+    } catch (error) {
+      console.error('Audio engine destruction error:', error);
     }
-    
-    // Close audio context
-    this.isWarmedUp = false;
-    
-    // Close asynchronously to avoid blocking
-    this.audioContext.close().then(() => {
-      // Audio context closed successfully
-    }).catch(error => {
-      console.error('Audio context close error:', error);
-    });
   }
 }
