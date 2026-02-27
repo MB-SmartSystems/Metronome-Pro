@@ -382,7 +382,7 @@ export class MetronomeEngine implements IMetronomeEngine {
       try {
         source.stop();
         source.disconnect();
-      } catch (e) {
+      } catch (_e) {
         // Source may already be stopped
       }
     });

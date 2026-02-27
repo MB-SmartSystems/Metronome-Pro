@@ -1,4 +1,4 @@
-import { AudioConfig, AudioBufferPool, SoundLevel, SoundType } from '@/types/metronome';
+import { AudioConfig, AudioBufferPool, SoundLevel } from '@/types/metronome';
 
 export class AudioEngine {
   private audioContext: AudioContext;
@@ -12,27 +12,78 @@ export class AudioEngine {
   private retryDelay = 100; // Start with 100ms
   
   constructor() {
-    // Samsung S23 and high-end device optimization
+    // Device-specific optimizations
     const isSamsungHighEnd = /Android.*SM-S9\d\d/i.test(navigator.userAgent);
     const isHighEndDevice = /Android.*SM-S|iPhone1[3-9]|iPhone[2-9]/i.test(navigator.userAgent);
     
+    // Chrome 119+ optimization detection
+    const isAndroidChrome119Plus = this.detectChromeVersion() >= 119 && /Android/i.test(navigator.userAgent);
+    const isChromeLatest = isAndroidChrome119Plus && this.detectChromeVersion() >= 125;
+    
     this.config = {
       sampleRate: 44100,
-      bufferSize: isSamsungHighEnd ? 128 : (isHighEndDevice ? 256 : 512),
-      lookaheadTime: isSamsungHighEnd ? 0.010 : (isHighEndDevice ? 0.012 : 0.015),
-      scheduleInterval: isSamsungHighEnd ? 0.006 : (isHighEndDevice ? 0.008 : 0.010)
+      bufferSize: this.getOptimalBufferSize(isSamsungHighEnd, isHighEndDevice, isAndroidChrome119Plus),
+      lookaheadTime: this.getOptimalLookahead(isSamsungHighEnd, isHighEndDevice, isAndroidChrome119Plus),
+      scheduleInterval: this.getOptimalScheduleInterval(isSamsungHighEnd, isHighEndDevice, isAndroidChrome119Plus)
     };
     
-    // Create AudioContext with optimal settings
-    this.audioContext = new AudioContext({
+    // Create AudioContext with enhanced settings for Chrome 119+
+    const contextOptions: AudioContextOptions = {
       sampleRate: this.config.sampleRate,
-      latencyHint: 'interactive', // Critical for low latency
-    });
+      latencyHint: isAndroidChrome119Plus ? 'playback' : 'interactive', // Chrome 119+ optimizes playback hint better
+    };
+    
+    // Chrome 125+ supports additional optimization hints
+    if (isChromeLatest && 'AudioContext' in window) {
+      // Enable advanced Chrome features when available
+      try {
+        this.audioContext = new AudioContext({
+          ...contextOptions,
+          // @ts-expect-error - Future Chrome features not in types yet
+          renderQuantumSize: 32, // Smaller quantum for Chrome 125+
+          latencyHint: 'balanced',
+        });
+      } catch {
+        // Fallback to standard options
+        this.audioContext = new AudioContext(contextOptions);
+      }
+    } else {
+      this.audioContext = new AudioContext(contextOptions);
+    }
 
     // Create master gain node for volume control and cleanup
     this.masterGain = this.audioContext.createGain();
     this.masterGain.gain.value = 1.0;
     this.masterGain.connect(this.audioContext.destination);
+  }
+
+  private detectChromeVersion(): number {
+    const match = navigator.userAgent.match(/Chrome\/(\d+)/);
+    return match ? parseInt(match[1], 10) : 0;
+  }
+
+  private getOptimalBufferSize(isSamsungHighEnd: boolean, isHighEndDevice: boolean, isChrome119Plus: boolean): number {
+    if (isChrome119Plus) {
+      // Chrome 119+ has optimized audio processing pipeline
+      return isSamsungHighEnd ? 64 : (isHighEndDevice ? 128 : 256);
+    }
+    return isSamsungHighEnd ? 128 : (isHighEndDevice ? 256 : 512);
+  }
+
+  private getOptimalLookahead(isSamsungHighEnd: boolean, isHighEndDevice: boolean, isChrome119Plus: boolean): number {
+    if (isChrome119Plus) {
+      // Chrome 119+ has better scheduling precision
+      return isSamsungHighEnd ? 0.008 : (isHighEndDevice ? 0.010 : 0.012);
+    }
+    return isSamsungHighEnd ? 0.010 : (isHighEndDevice ? 0.012 : 0.015);
+  }
+
+  private getOptimalScheduleInterval(isSamsungHighEnd: boolean, isHighEndDevice: boolean, isChrome119Plus: boolean): number {
+    if (isChrome119Plus) {
+      // Chrome 119+ can handle tighter scheduling
+      return isSamsungHighEnd ? 0.004 : (isHighEndDevice ? 0.005 : 0.006);
+    }
+    return isSamsungHighEnd ? 0.006 : (isHighEndDevice ? 0.008 : 0.010);
   }
 
   async initialize(): Promise<void> {
@@ -108,7 +159,7 @@ export class AudioEngine {
         source.onended = () => {
           try {
             gainNode.disconnect();
-          } catch (e) {
+          } catch (_e) {
             // Already disconnected
           }
         };
@@ -203,7 +254,7 @@ export class AudioEngine {
         this.activeSources.delete(source);
         try {
           gainNode.disconnect();
-        } catch (e) {
+        } catch (_e) {
           // Already disconnected
         }
       };
@@ -228,7 +279,7 @@ export class AudioEngine {
       try {
         source.stop();
         source.disconnect();
-      } catch (e) {
+      } catch (_e) {
         // Source may already be stopped/disconnected
       }
     });
@@ -237,9 +288,9 @@ export class AudioEngine {
     try {
       this.masterGain.disconnect();
       this.masterGain.connect(this.audioContext.destination);
-    } catch (e) {
+    } catch (_e) {
       // Handle reconnection errors
-      console.error('Master gain reconnection error:', e);
+      console.error('Master gain reconnection error:', _e);
     }
   }
 
@@ -277,7 +328,7 @@ export class AudioEngine {
         // Cleanup
         try {
           testGain.disconnect();
-        } catch (e) {
+        } catch (_e) {
           // Already disconnected
         }
       }
@@ -335,7 +386,7 @@ export class AudioEngine {
     // Disconnect master gain
     try {
       this.masterGain.disconnect();
-    } catch (e) {
+    } catch (_e) {
       // Already disconnected
     }
     

@@ -315,11 +315,7 @@ export default function HomePage() {
                          [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
                          md:w-32 md:h-20 md:border-none"
               />
-              {/* Live update indicator */}
-              {(state.isPlaying || state.isPaused) && (
-                <div className="absolute -top-2 -right-2 w-2 h-2 bg-green-400 rounded-full animate-pulse" 
-                     title="Live updates enabled" />
-              )}
+
               <div className="text-white text-lg font-medium">BPM</div>
             </div>
           </div>
@@ -358,13 +354,7 @@ export default function HomePage() {
             onBeatsChange={actions.setBeatsPerMeasure}
             onSubdivisionsChange={actions.setSubdivisions}
           />
-          {/* Live update indicators for subdivisions */}
-          {(state.isPlaying || state.isPaused) && (
-            <div className="absolute -top-1 right-4 flex space-x-2">
-              <div className="w-1 h-1 bg-green-400 rounded-full animate-pulse" />
-              <div className="w-1 h-1 bg-green-400 rounded-full animate-pulse" />
-            </div>
-          )}
+
         </div>
 
         {/* Play/Pause/Resume Button */}

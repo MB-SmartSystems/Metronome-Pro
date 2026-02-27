@@ -34,7 +34,7 @@ class MetronomeWorker {
   private currentSubdivision = 1;
   private lookaheadTime = 0.025; // 25ms
   private scheduleInterval = 0.025; // 25ms
-  private timerID: any = null;
+  private timerID: ReturnType<typeof setInterval> | null = null;
 
   private getBeatLength(): number {
     return 60.0 / this.bpm; // Length of one beat in seconds

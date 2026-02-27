@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { MetronomeState, BeatLevel, AccentColor } from '@/types/metronome';
+import { MetronomeState, AccentColor } from '@/types/metronome';
+import { useSmoothPulse } from '@/hooks/use-smooth-pulse';
 
 interface MetronomeDisplayProps {
   state: MetronomeState & { isPaused?: boolean };
@@ -25,6 +26,14 @@ const ACCENT_COLORS: Record<AccentColor, { bg: string; border: string; shadow: s
 
 export default function MetronomeDisplay({ state, onBeatClick, onColorChange, showSettings, onToggleSettings }: MetronomeDisplayProps) {
   const { currentBeat, currentSubdivision, subdivisions, beatsPerMeasure, isPlaying, isPaused, accentColor, beatPattern } = state;
+
+  // Smooth pulse animation for the current beat
+  const pulseOpacity = useSmoothPulse({
+    isActive: isPlaying && !isPaused,
+    duration: 600, // 600ms pulse cycle
+    maxOpacity: 1,
+    minOpacity: 0.6,
+  });
 
   // Calculate optimal layout - FIXED SPACING
   const calculateLayout = (totalBeats: number) => {
@@ -60,6 +69,7 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
     const beatIndex = beatNumber - 1;
     const isCurrentBeat = beatNumber === currentBeat && (isPlaying || isPaused);
     const beatLevel = beatPattern[beatIndex] || 'normal';
+    const shouldAnimate = isCurrentBeat && isPlaying && !isPaused;
     
     // Visual states with clear beat level encoding (accent/normal/muted)
     const getVisualState = () => {
@@ -74,13 +84,13 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
             return 'bg-black border-white border-dashed scale-110';
           }
         } else if (isPlaying) {
-          // Playing state - animated
+          // Playing state - smooth animated pulse (no CSS animate-pulse)
           if (beatLevel === 'accent') {
-            return `${colors.bg} ${colors.border} ${colors.shadow} shadow-lg animate-pulse scale-110`;
+            return `${colors.bg} ${colors.border} ${colors.shadow} shadow-lg scale-110`;
           } else if (beatLevel === 'normal') {
-            return 'bg-white border-white shadow-white/50 shadow-lg animate-pulse scale-110';
+            return 'bg-white border-white shadow-white/50 shadow-lg scale-110';
           } else {
-            return 'bg-black border-white border-dashed animate-pulse scale-110';
+            return 'bg-black border-white border-dashed scale-110';
           }
         }
       }
@@ -94,8 +104,17 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
         return 'bg-transparent border-white/40 border-2 border-dashed';
       }
     };
+    
+    // Apply smooth pulse opacity when animating
+    const getInlineStyle = () => {
+      if (shouldAnimate && isCurrentBeat) {
+        return { opacity: pulseOpacity };
+      }
+      return {};
+    };
 
-    const getTextColor = () => {
+    // Text color based on beat state
+    const textColor = (() => {
       if (isCurrentBeat && (beatLevel === 'accent' || beatLevel === 'normal')) {
         return 'text-black';
       }
@@ -104,7 +123,7 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
         return 'text-white/40';
       }
       return 'text-white/70';
-    };
+    })();
 
     return (
       <button
@@ -113,6 +132,7 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
         aria-label={`Beat ${beatNumber}: ${beatLevel}${isCurrentBeat ? ' - currently active' : ''}`}
         aria-pressed={beatLevel === 'accent'}
         tabIndex={0}
+        style={getInlineStyle()}
         className={`
           relative w-12 h-12 rounded-full border-3 cursor-pointer
           hover:scale-105 active:scale-95 hover:border-white/80
@@ -123,7 +143,7 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
       >
         {/* Clean dot design - NO NUMBERS */}
         
-        {/* Subdivision indicators - FIXED POSITIONING */}
+        {/* Subdivision indicators - SIMPLIFIED */}
         {subdivisions > 1 && (
           <div className="absolute -bottom-5 left-1/2 transform -translate-x-1/2 flex justify-center space-x-0.5">
             {Array.from({ length: subdivisions }, (_, subIndex) => {
@@ -137,17 +157,20 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
               let indicatorClass = 'w-1.5 h-1.5 rounded-full transition-all duration-75';
               
               if (isCurrentSubdivision) {
-                if (isPaused) {
-                  indicatorClass += ` ${colors.bg}`; // Solid color when paused
-                } else {
-                  indicatorClass += ` ${colors.bg} animate-pulse`; // Animated when playing
+                indicatorClass += ` ${colors.bg}`;
+                if (isPlaying && !isPaused) {
+                  indicatorClass += ' animate-pulse';
                 }
               } else {
                 indicatorClass += ' bg-white/30';
               }
               
               return (
-                <div key={subdivision} className={indicatorClass} />
+                <div 
+                  key={subdivision} 
+                  className={indicatorClass}
+                  aria-label={`Subdivision ${subdivision}${isCurrentSubdivision ? ' active' : ''}`}
+                />
               );
             })}
           </div>
@@ -156,69 +179,68 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
     );
   };
 
-  // Render beat rows with proper spacing
-  const renderBeatRows = () => {
-    let beatCounter = 1;
-    
-    return layout.rows.map((beatsInRow, rowIndex) => (
-      <div key={rowIndex} className={`flex justify-center ${layout.spacing} mb-6`}>
-        {Array.from({ length: beatsInRow }, () => generateBeatDot(beatCounter++))}
-      </div>
-    ));
+  // Create rows layout with proper spacing
+  let beatCounter = 1;
+  const createRow = (beatsInRow: number) => {
+    const rowBeats = [];
+    for (let i = 0; i < beatsInRow; i++) {
+      if (beatCounter <= beatsPerMeasure) {
+        rowBeats.push(generateBeatDot(beatCounter));
+        beatCounter++;
+      }
+    }
+    return rowBeats;
   };
 
+  const colorOptions: AccentColor[] = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'cyan'];
+
   return (
-    <div className="flex flex-col items-center p-4 relative">
-      {/* Settings Button */}
-      <div className="absolute top-2 right-2">
+    <div className="flex flex-col items-center space-y-6">
+      {/* Settings Button - Color selector */}
+      <div className="relative">
         <button
           onClick={onToggleSettings}
-          className="w-8 h-8 rounded-full border-2 border-white/30 bg-black 
-                   hover:border-white/60 transition-colors flex items-center justify-center"
-        >
-          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Settings Panel */}
-      {showSettings && (
-        <div className="absolute top-12 right-2 bg-black border-2 border-white/20 rounded-lg p-3 z-10 shadow-xl">
-          <h3 className="text-white text-xs font-bold mb-2">Accent Colors</h3>
-          <div className="grid grid-cols-4 gap-1.5">
-            {(Object.keys(ACCENT_COLORS) as AccentColor[]).map((color) => {
-              const colorConfig = ACCENT_COLORS[color];
-              return (
+          className={`w-8 h-8 rounded-full ${colors.bg} ${colors.border} border-2 
+                     hover:scale-110 active:scale-95 transition-all duration-150
+                     shadow-lg ${colors.shadow} focus:ring-2 focus:ring-white/30`}
+          aria-label="Change accent color"
+          aria-expanded={showSettings}
+        />
+        
+        {showSettings && (
+          <div className="absolute top-10 left-1/2 transform -translate-x-1/2 z-50
+                        bg-gray-900 border border-gray-600 rounded-lg p-4 shadow-xl
+                        animate-in slide-in-from-top-2 duration-200">
+            <div className="grid grid-cols-4 gap-2">
+              {colorOptions.map((color) => (
                 <button
                   key={color}
                   onClick={() => onColorChange(color)}
-                  className={`
-                    w-6 h-6 rounded border-2 transition-all
-                    ${colorConfig.bg}
-                    ${accentColor === color ? 'border-white scale-110' : 'border-transparent hover:scale-105'}
-                  `}
-                  title={color.charAt(0).toUpperCase() + color.slice(1)}
+                  className={`w-8 h-8 rounded-full ${ACCENT_COLORS[color].bg} border-2
+                           ${color === accentColor ? 'border-white' : 'border-transparent'}
+                           hover:scale-110 active:scale-95 transition-all duration-150`}
+                  aria-label={`Set accent color to ${color}`}
                 />
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Clean design - no debug indicators */}
-
-      {/* Beat Dots - Properly Spaced Multi-Row Layout */}
-      <div className="flex flex-col items-center">
-        {renderBeatRows()}
+        )}
       </div>
 
-      {/* Visual spacing for subdivisions when present */}
-      {subdivisions > 1 && (
-        <div className="h-4" />
-      )}
+      {/* Beat Display */}
+      <div className="flex flex-col items-center space-y-8">
+        {layout.rows.map((beatsInRow, rowIndex) => (
+          <div key={rowIndex} className={`flex justify-center ${layout.spacing}`}>
+            {createRow(beatsInRow)}
+          </div>
+        ))}
+      </div>
+      
+      {/* Status indication for screen readers */}
+      <div className="sr-only" aria-live="polite">
+        Current beat: {currentBeat} of {beatsPerMeasure}
+        {subdivisions > 1 && `, subdivision ${currentSubdivision} of ${subdivisions}`}
+      </div>
     </div>
   );
 }

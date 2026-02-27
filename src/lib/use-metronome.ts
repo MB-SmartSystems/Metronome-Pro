@@ -141,7 +141,7 @@ export function useMetronome() {
       
       // No need to restart - live updates work!
     }
-  }, [state.isPlaying]);
+  }, []);
 
   // Set subdivisions with live update support
   const setSubdivisions = useCallback((subdivisions: number) => {
@@ -151,7 +151,7 @@ export function useMetronome() {
       
       // No need to restart - live updates work!
     }
-  }, [state.isPlaying]);
+  }, []);
 
   // Set beats per measure
   const setBeatsPerMeasure = useCallback((beats: number) => {
