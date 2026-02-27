@@ -1,4 +1,4 @@
-# 🥁 Metronom Pro
+# 🥁 Metronome Pro
 
 Professional metronome app with **<10ms latency** for Samsung S23 and modern web browsers.
 
@@ -17,7 +17,7 @@ Professional metronome app with **<10ms latency** for Samsung S23 and modern web
 
 ### Audio Engine
 - **Web Audio API** with `latencyHint: 'playback'`
-- **Audio Buffer Pool** for zero-latency sound playback
+- **Audio Buffer Pool** for zero-latency sound playbook
 - **25ms Lookahead Scheduler** with precise event timing
 - **Worker Thread Timer** for consistent scheduling
 - **Synthesized Audio**: Pure JavaScript sound generation
@@ -38,8 +38,8 @@ Professional metronome app with **<10ms latency** for Samsung S23 and modern web
 
 ### Development
 ```bash
-git clone <repository>
-cd metronom-pro
+git clone https://github.com/MB-SmartSystems/Metronome-Pro.git
+cd metronome-pro
 npm install
 npm run dev
 ```
