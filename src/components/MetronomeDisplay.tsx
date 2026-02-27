@@ -110,12 +110,7 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
           ${getVisualState()}
         `}
       >
-        <span className={`
-          absolute inset-0 flex items-center justify-center text-sm font-bold
-          ${getTextColor()}
-        `}>
-          {beatNumber}
-        </span>
+        {/* Clean dot design - NO NUMBERS */}
         
         {/* Subdivision indicators - FIXED POSITIONING */}
         {subdivisions > 1 && (
@@ -202,12 +197,7 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
         </div>
       )}
 
-      {/* Status indicator for pause */}
-      {isPaused && (
-        <div className="absolute top-2 left-2 text-xs text-white/60 bg-black/50 px-2 py-1 rounded">
-          PAUSED
-        </div>
-      )}
+      {/* Clean design - no debug indicators */}
 
       {/* Beat Dots - Properly Spaced Multi-Row Layout */}
       <div className="flex flex-col items-center">

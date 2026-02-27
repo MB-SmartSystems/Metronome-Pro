@@ -408,7 +408,7 @@ export class MetronomeEngine implements IMetronomeEngine {
     const audioTime = this.audioEngine.getCurrentTime();
     const startTime = audioTime + 0.002; // 2ms delay for audio readiness
     
-    console.log(`Starting metronome at beat 1, audio time: ${startTime}`);
+    // Starting metronome at beat 1
     
     this.worker.postMessage({
       type: 'start',
@@ -419,7 +419,7 @@ export class MetronomeEngine implements IMetronomeEngine {
   pause(): void {
     if (!this.state.isPlaying || !this.worker) return;
     
-    console.log('Pausing metronome - stopping all audio immediately');
+    // Pausing metronome - stopping all audio immediately
     
     // Immediately stop all current audio sources
     this.cleanupAllAudioSources();
@@ -447,7 +447,7 @@ export class MetronomeEngine implements IMetronomeEngine {
         const audioTime = this.audioEngine.getCurrentTime();
         const resumeTime = audioTime + 0.002;
         
-        console.log('Resuming metronome from current position');
+        // Resuming metronome from current position
         
         this.worker.postMessage({
           type: 'resume',
@@ -464,7 +464,7 @@ export class MetronomeEngine implements IMetronomeEngine {
   stop(): void {
     if (!this.worker) return;
     
-    console.log('Stopping metronome - resetting to beat 1');
+    // Stopping metronome - resetting to beat 1
     
     // Immediately cleanup all audio
     this.cleanupAllAudioSources();

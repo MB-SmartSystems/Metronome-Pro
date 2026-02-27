@@ -46,27 +46,24 @@ function PlayStopButton({ state, onToggle, isInitialized }: {
         />
       );
     } else if (isPlaying && !isPaused) {
-      // Playing - Show pause icon
+      // Playing - Show pause icon (clean hover)
       return (
         <div className="flex space-x-1.5">
-          <div className={`w-2.5 h-8 ${colors.bg} group-hover:bg-black`}></div>
-          <div className={`w-2.5 h-8 ${colors.bg} group-hover:bg-black`}></div>
+          <div className={`w-2.5 h-8 ${colors.bg}`}></div>
+          <div className={`w-2.5 h-8 ${colors.bg}`}></div>
         </div>
       );
     } else if (!isPlaying && isPaused) {
-      // Paused - Show resume icon (play with indicator)
+      // Paused - Show clean resume icon (no artifacts)
       return (
-        <div className="relative">
-          <div 
-            className="w-0 h-0 ml-1"
-            style={{
-              borderLeft: `12px solid ${colors.color}`,
-              borderTop: '10px solid transparent',
-              borderBottom: '10px solid transparent'
-            }}
-          />
-          <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full animate-pulse"></div>
-        </div>
+        <div 
+          className="w-0 h-0 ml-1"
+          style={{
+            borderLeft: `12px solid ${colors.color}`,
+            borderTop: '10px solid transparent',
+            borderBottom: '10px solid transparent'
+          }}
+        />
       );
     }
   };
@@ -84,8 +81,8 @@ function PlayStopButton({ state, onToggle, isInitialized }: {
       disabled={!isInitialized}
       title={getButtonLabel()}
       className={`w-24 h-24 border-4 ${colors.border} bg-black rounded-full 
-                 hover:${colors.bg} active:scale-95 transition-all duration-200
-                 flex items-center justify-center group shadow-lg ${colors.shadow}
+                 hover:scale-110 active:scale-95 transition-all duration-200
+                 flex items-center justify-center shadow-lg ${colors.shadow}
                  disabled:opacity-50 disabled:cursor-not-allowed`}
     >
       {getButtonContent()}
@@ -133,7 +130,7 @@ export default function HomePage() {
       const calculatedBPM = Math.round(60000 / median);
       
       if (calculatedBPM >= 40 && calculatedBPM <= 300) {
-        console.log(`TAP tempo calculated: ${calculatedBPM} BPM from ${newTapTimes.length} taps`);
+        // TAP tempo calculated
         actions.setBPM(calculatedBPM);
       }
     }
@@ -186,14 +183,9 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col relative">
-      {/* Header with status */}
+      {/* Clean header */}
       <header className="flex items-center justify-center p-4 border-b border-white/10 relative">
         <h1 className="text-2xl font-bold text-white">Metronome Pro</h1>
-        {state.isPaused && (
-          <span className="absolute right-4 text-xs text-yellow-400 bg-yellow-400/20 px-2 py-1 rounded">
-            PAUSED
-          </span>
-        )}
       </header>
 
       {/* Main Content */}

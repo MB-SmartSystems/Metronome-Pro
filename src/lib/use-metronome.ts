@@ -27,7 +27,7 @@ export function useMetronome() {
 
     try {
       setError(null);
-      console.log('Initializing metronome engine...');
+      // Initializing metronome engine
       
       const engine = new MetronomeEngine();
       await engine.initialize();
@@ -56,7 +56,7 @@ export function useMetronome() {
       // Sync initial state
       setState(engine.getState());
       
-      console.log('Metronome initialized successfully');
+      // Metronome initialized successfully
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to initialize metronome';
       console.error('Initialization error:', err);
