@@ -7,11 +7,14 @@ export class AudioEngine {
   private isWarmedUp = false;
   
   constructor() {
+    // Samsung S23 optimization - detect and adjust for high-end Android devices
+    const isSamsungHighEnd = /Android.*SM-S9\d\d/i.test(navigator.userAgent);
+    
     this.config = {
       sampleRate: 44100,
-      bufferSize: 256, // Smaller buffer for lower latency
-      lookaheadTime: 0.015, // Reduced to 15ms
-      scheduleInterval: 0.010 // More frequent scheduling
+      bufferSize: isSamsungHighEnd ? 128 : 256, // Smaller buffer for Samsung S23+
+      lookaheadTime: isSamsungHighEnd ? 0.012 : 0.015, // Tighter timing for high-end devices
+      scheduleInterval: isSamsungHighEnd ? 0.008 : 0.010 // More aggressive scheduling for Samsung
     };
     
     // Create AudioContext with optimal settings for mobile

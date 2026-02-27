@@ -73,8 +73,9 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
         key={beatNumber}
         onClick={() => onBeatClick(beatIndex)}
         className={`
-          relative w-14 h-14 rounded-full border-4 transition-all duration-75 cursor-pointer
+          relative w-14 h-14 rounded-full border-4 cursor-pointer
           hover:scale-105 active:scale-95
+          ${isCurrentBeat ? 'transition-all duration-50' : 'transition-all duration-75'}
           ${getVisualState()}
         `}
       >
