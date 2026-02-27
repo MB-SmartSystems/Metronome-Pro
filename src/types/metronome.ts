@@ -39,7 +39,7 @@ export interface AudioBufferPool {
 }
 
 export interface MetronomeEngine {
-  start(): void;
+  start(): Promise<void>;
   stop(): void;
   setBPM(bpm: number): void;
   setSubdivisions(subdivisions: number): void;

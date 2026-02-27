@@ -63,15 +63,8 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
           return 'bg-black border-white animate-pulse scale-110';
         }
       } else {
-        // Inaktiver Beat - Zustand anzeigen
-        if (beatLevel === 'accent') {
-          return `${colors.bg} ${colors.border} opacity-60`;
-        } else if (beatLevel === 'normal') {
-          return 'bg-white/20 border-white opacity-60';
-        } else {
-          // Stumm - durchsichtig
-          return 'bg-transparent border-white/30';
-        }
+        // Inaktiver Beat (Ruhezustand) - nur weiße Ringe
+        return 'bg-transparent border-white/60';
       }
     };
 
@@ -87,7 +80,7 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
       >
         <span className={`
           absolute inset-0 flex items-center justify-center text-sm font-bold
-          ${isCurrentBeat || beatLevel === 'accent' ? 'text-black' : 'text-white'}
+          ${isCurrentBeat && (beatLevel === 'accent' || beatLevel === 'normal') ? 'text-black' : 'text-white'}
         `}>
           {beatNumber}
         </span>
@@ -177,27 +170,6 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
       {/* Beat Dots - Multi-Row Layout */}
       <div className="flex flex-col items-center space-y-4">
         {renderBeatRows()}
-      </div>
-      
-      {/* Instruktionen */}
-      <div className="text-center">
-        <p className="text-white/60 text-sm mb-2">
-          Klicke auf Punkte: Normal → Akzent → Stumm
-        </p>
-        <div className="flex items-center justify-center space-x-6 text-xs">
-          <div className="flex items-center space-x-2">
-            <div className={`w-3 h-3 rounded-full ${colors.bg}`}></div>
-            <span className="text-white/60">Akzent</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-white"></div>
-            <span className="text-white/60">Normal</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full border border-white/40"></div>
-            <span className="text-white/60">Stumm</span>
-          </div>
-        </div>
       </div>
 
 

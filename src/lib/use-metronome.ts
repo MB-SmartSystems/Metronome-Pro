@@ -25,15 +25,41 @@ export function useMetronome() {
     if (engineRef.current || isInitialized) return;
 
     try {
+      setError(null); // Clear any previous errors
+      
       const engine = new MetronomeEngine();
+      
+      // Initialize with mobile-specific handling
       await engine.initialize();
+      
+      // Additional mobile audio preparation
+      if (/Android/i.test(navigator.userAgent)) {
+        // Give mobile audio system extra time to fully initialize
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Test audio capability with silent playback
+        try {
+          const testAudioContext = new AudioContext();
+          if (testAudioContext.state === 'suspended') {
+            await testAudioContext.resume();
+          }
+          await testAudioContext.close();
+        } catch (testError) {
+          console.warn('Mobile audio test failed:', testError);
+        }
+      }
+      
       engineRef.current = engine;
       setIsInitialized(true);
       
       // Sync initial state
       setState(engine.getState());
+      
+      console.log('Metronome initialized successfully');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to initialize metronome');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize metronome';
+      console.error('Initialization error:', err);
+      setError(errorMessage);
     }
   }, [isInitialized]);
 
@@ -44,8 +70,27 @@ export function useMetronome() {
     }
     
     if (engineRef.current && !state.isPlaying) {
-      engineRef.current.start();
-      setState(engineRef.current.getState());
+      // CRITICAL: Ensure audio system is fully ready before starting
+      // This prevents the 3-4 beat delay on first start
+      try {
+        // Force audio context to be fully active
+        const audioContext = (engineRef.current as any).audioEngine?.audioContext;
+        if (audioContext && audioContext.state === 'suspended') {
+          await audioContext.resume();
+        }
+        
+        // Small delay to ensure mobile audio system is ready
+        // This is especially important on Samsung devices
+        if (/Android/i.test(navigator.userAgent)) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        await engineRef.current.start();
+        setState(engineRef.current.getState());
+      } catch (error) {
+        console.error('Failed to start metronome:', error);
+        setError('Failed to start metronome. Please try again.');
+      }
     }
   }, [initialize, state.isPlaying]);
 

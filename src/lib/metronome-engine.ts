@@ -17,7 +17,7 @@ export class MetronomeEngine implements IMetronomeEngine {
       bpm: 120,
       subdivisions: 1,
       beatsPerMeasure: 4,
-      currentBeat: 0, // Startet bei 0, wird zu 1 bei erstem Start
+      currentBeat: 1, // Startet bei 1 für korrekte UI-Anzeige
       currentSubdivision: 1,
       soundType: 'click',
       accentColor: 'red',
@@ -62,12 +62,13 @@ export class MetronomeEngine implements IMetronomeEngine {
         this.subdivisions = 1;
         this.beatsPerMeasure = 4;
         this.nextNoteTime = 0;
-        this.currentBeat = 1; // Beginnt bei 1 für ersten Beat
+        this.currentBeat = 1;
         this.currentSubdivision = 1;
         this.lookaheadTime = 0.025; // 25ms
-        this.scheduleInterval = 0.025; // 25ms
+        this.scheduleInterval = 0.010; // 10ms for tighter timing
         this.timerID = null;
         this.beatPattern = ['accent', 'normal', 'normal', 'normal'];
+        this.startOffset = 0; // Track time offset for sync
       }
 
       getBeatLength() {
@@ -80,32 +81,31 @@ export class MetronomeEngine implements IMetronomeEngine {
 
       scheduler() {
         const events = [];
-        const currentTime = performance.now() / 1000;
+        // Use high-resolution timer relative to start
+        const currentTime = this.startOffset + (performance.now() / 1000);
         
         while (this.nextNoteTime < currentTime + this.lookaheadTime) {
           const beatIndex = this.currentBeat - 1;
           const beatLevel = this.beatPattern[beatIndex] || 'normal';
           
-          // Nur Sound-Event erstellen wenn Beat nicht stumm ist
           if (beatLevel !== 'muted') {
             let soundLevel;
             if (this.currentSubdivision === 1) {
-              // Hauptschlag - verwende Beat-Pattern
               soundLevel = beatLevel === 'accent' ? 'accent' : 'normal';
             } else {
-              // Subdivision
               soundLevel = 'subdivision';
             }
 
+            // Use audio context time directly for scheduling
             events.push({
-              time: this.nextNoteTime,
+              audioTime: this.nextNoteTime, // Direct audio context time
               level: soundLevel,
               beat: this.currentBeat,
               subdivision: this.currentSubdivision
             });
           }
 
-          // Update Beat/Subdivision Position
+          // Update position
           this.currentSubdivision++;
           if (this.currentSubdivision > this.subdivisions) {
             this.currentSubdivision = 1;
@@ -118,7 +118,7 @@ export class MetronomeEngine implements IMetronomeEngine {
           this.nextNoteTime += this.getSubdivisionLength();
         }
 
-        // Sende Events und aktuelle Position
+        // Send events and position
         if (events.length > 0) {
           postMessage({ type: 'scheduled', events });
         }
@@ -134,16 +134,19 @@ export class MetronomeEngine implements IMetronomeEngine {
         if (this.isRunning) return;
         
         this.isRunning = true;
-        this.nextNoteTime = audioContextTime;
-        // WICHTIG: Korrekt bei 1 starten, nicht bei 0
+        // Set start time and first beat time
+        this.startOffset = audioContextTime;
+        this.nextNoteTime = audioContextTime; // Start immediately
         this.currentBeat = 1;
         this.currentSubdivision = 1;
         
-        // Sofortiger erster Scheduler-Aufruf für sofortigen Start
+        // CRITICAL: Schedule first beat immediately
         this.scheduler();
         
         this.timerID = setInterval(() => {
-          this.scheduler();
+          if (this.isRunning) {
+            this.scheduler();
+          }
         }, this.scheduleInterval * 1000);
       }
 
@@ -153,7 +156,6 @@ export class MetronomeEngine implements IMetronomeEngine {
           clearInterval(this.timerID);
           this.timerID = null;
         }
-        // Reset zu Beat 1 bei Stop
         this.currentBeat = 1;
         this.currentSubdivision = 1;
       }
@@ -168,7 +170,6 @@ export class MetronomeEngine implements IMetronomeEngine {
 
       setBeatsPerMeasure(beats) {
         this.beatsPerMeasure = Math.max(2, Math.min(16, beats));
-        // Reset auf Beat 1 bei Änderung
         if (this.currentBeat > this.beatsPerMeasure) {
           this.currentBeat = 1;
         }
@@ -209,7 +210,7 @@ export class MetronomeEngine implements IMetronomeEngine {
     `;
   }
 
-  private handleWorkerMessage(message: WorkerResponse): void {
+  private handleWorkerMessage(message: any): void {
     switch (message.type) {
       case 'scheduled':
         if (message.events) {
@@ -228,28 +229,48 @@ export class MetronomeEngine implements IMetronomeEngine {
     }
   }
 
-  private scheduleAudioEvents(events: ScheduledEvent[]): void {
-    const audioTime = this.audioEngine.getCurrentTime();
-    
+  private scheduleAudioEvents(events: any[]): void {    
     events.forEach(event => {
-      const scheduleTime = audioTime + (event.time - performance.now() / 1000);
-      this.audioEngine.playSound(event.level, scheduleTime);
+      // Use direct audio context time - no conversion needed
+      const scheduleTime = event.audioTime;
+      
+      // Only schedule if time is in the future
+      const currentAudioTime = this.audioEngine.getCurrentTime();
+      if (scheduleTime >= currentAudioTime) {
+        this.audioEngine.playSound(event.level, scheduleTime);
+      } else {
+        // If we missed the timing, play immediately
+        this.audioEngine.playSound(event.level, currentAudioTime);
+      }
     });
   }
 
-  start(): void {
+  async start(): Promise<void> {
     if (!this.initialized || this.state.isPlaying || !this.worker) return;
     
-    this.state.isPlaying = true;
-    const audioTime = this.audioEngine.getCurrentTime();
+    // Ensure audio system is fully ready (critical for mobile)
+    const audioReady = await this.audioEngine.ensureAudioReady();
+    if (!audioReady) {
+      console.warn('Audio system not ready, attempting to start anyway');
+    }
     
-    // Reset zu Beat 1 bei Start
+    this.state.isPlaying = true;
+    
+    // Get current audio time with minimal delay for immediate start
+    const audioTime = this.audioEngine.getCurrentTime();
+    const startTime = audioTime + 0.002; // Reduced to 2ms for faster response
+    
+    // Reset position
     this.state.currentBeat = 1;
     this.state.currentSubdivision = 1;
     
+    // Log audio system info for debugging
+    console.log('Audio system info:', this.audioEngine.getAudioInfo());
+    console.log(`Starting metronome at audio time: ${startTime} (current: ${audioTime})`);
+    
     this.worker.postMessage({
       type: 'start',
-      audioContextTime: audioTime
+      audioContextTime: startTime
     } as WorkerMessage);
   }
 

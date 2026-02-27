@@ -4,28 +4,79 @@ export class AudioEngine {
   private audioContext: AudioContext;
   private bufferPool: AudioBufferPool | null = null;
   private config: AudioConfig;
+  private isWarmedUp = false;
   
   constructor() {
     this.config = {
       sampleRate: 44100,
-      bufferSize: 512,
-      lookaheadTime: 0.025, // 25ms
-      scheduleInterval: 0.025 // 25ms
+      bufferSize: 256, // Smaller buffer for lower latency
+      lookaheadTime: 0.015, // Reduced to 15ms
+      scheduleInterval: 0.010 // More frequent scheduling
     };
     
+    // Create AudioContext with optimal settings for mobile
     this.audioContext = new AudioContext({
       sampleRate: this.config.sampleRate,
-      latencyHint: 'playback' // Optimize for low latency
+      latencyHint: 'interactive', // Changed from 'playback' to 'interactive' for lower latency
     });
   }
 
   async initialize(): Promise<void> {
+    // Force AudioContext to ready state
     if (this.audioContext.state === 'suspended') {
       await this.audioContext.resume();
     }
     
-    // Create audio buffer pool for zero-latency playback
+    // Create audio buffer pool
     this.bufferPool = await this.createAudioBuffers();
+    
+    // CRITICAL: Warm up audio pipeline with silent playback
+    await this.warmUpAudioPipeline();
+    
+    this.isWarmedUp = true;
+  }
+
+  private async warmUpAudioPipeline(): Promise<void> {
+    if (!this.bufferPool) return;
+    
+    // Play silent sound to initialize audio pipeline
+    // This primes the entire audio system for immediate response
+    const silentBuffer = this.createSilentBuffer(0.001); // 1ms silent
+    
+    try {
+      // Play multiple silent sounds to fully warm up the pipeline
+      for (let i = 0; i < 3; i++) {
+        const source = this.audioContext.createBufferSource();
+        const gainNode = this.audioContext.createGain();
+        
+        source.buffer = silentBuffer;
+        gainNode.gain.value = 0; // Silent
+        
+        source.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+        
+        const startTime = this.audioContext.currentTime + (i * 0.01);
+        source.start(startTime);
+        
+        // Wait a bit between warm-up sounds
+        if (i < 2) {
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+      }
+      
+      // Wait for warm-up to complete
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+    } catch (error) {
+      console.warn('Audio pipeline warm-up failed:', error);
+    }
+  }
+
+  private createSilentBuffer(duration: number): AudioBuffer {
+    const frameCount = duration * this.audioContext.sampleRate;
+    const buffer = this.audioContext.createBuffer(1, frameCount, this.audioContext.sampleRate);
+    // Buffer is already silent (zeros), no need to fill
+    return buffer;
   }
 
   private async createAudioBuffers(): Promise<AudioBufferPool> {
@@ -109,19 +160,106 @@ export class AudioEngine {
   }
 
   playSound(level: SoundLevel, time: number): void {
-    if (!this.bufferPool) return;
+    if (!this.bufferPool || !this.isWarmedUp) return;
     
-    const source = this.audioContext.createBufferSource();
-    source.buffer = this.bufferPool[level];
-    source.connect(this.audioContext.destination);
-    source.start(time);
+    const currentTime = this.audioContext.currentTime;
+    
+    // Ensure we don't schedule sounds in the past
+    const scheduleTime = Math.max(time, currentTime);
+    
+    try {
+      const source = this.audioContext.createBufferSource();
+      source.buffer = this.bufferPool[level];
+      
+      // Create gain node for mobile audio optimization
+      const gainNode = this.audioContext.createGain();
+      gainNode.gain.value = 1.0;
+      
+      // Connect: source -> gain -> destination
+      source.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+      
+      // Start playback
+      source.start(scheduleTime);
+      
+      // Mobile-specific: Ensure the source is cleaned up
+      source.onended = () => {
+        try {
+          gainNode.disconnect();
+        } catch (e) {
+          // Ignore disconnect errors
+        }
+      };
+      
+    } catch (error) {
+      console.warn('Audio playback error:', error);
+      
+      // Fallback: Try to play immediately if scheduling failed
+      try {
+        const fallbackSource = this.audioContext.createBufferSource();
+        fallbackSource.buffer = this.bufferPool[level];
+        fallbackSource.connect(this.audioContext.destination);
+        fallbackSource.start(currentTime);
+      } catch (fallbackError) {
+        console.error('Fallback audio playback also failed:', fallbackError);
+      }
+    }
   }
 
   getCurrentTime(): number {
     return this.audioContext.currentTime;
   }
 
+  // Mobile-specific method to handle audio focus and policies
+  async ensureAudioReady(): Promise<boolean> {
+    try {
+      // Ensure audio context is running
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
+      
+      // For mobile devices, test immediate audio responsiveness
+      if (/Android|iOS/i.test(navigator.userAgent)) {
+        const testTime = this.audioContext.currentTime;
+        
+        // Quick audio pipeline test
+        const testSource = this.audioContext.createOscillator();
+        const testGain = this.audioContext.createGain();
+        
+        testGain.gain.value = 0; // Silent test
+        testSource.connect(testGain);
+        testGain.connect(this.audioContext.destination);
+        
+        testSource.frequency.value = 440;
+        testSource.start(testTime);
+        testSource.stop(testTime + 0.001);
+        
+        // Small delay for mobile audio to stabilize
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      
+      return this.audioContext.state === 'running' && this.isWarmedUp;
+    } catch (error) {
+      console.error('Audio readiness check failed:', error);
+      return false;
+    }
+  }
+
+  // Method to get audio system health info for debugging
+  getAudioInfo(): object {
+    return {
+      state: this.audioContext.state,
+      sampleRate: this.audioContext.sampleRate,
+      baseLatency: this.audioContext.baseLatency,
+      outputLatency: this.audioContext.outputLatency,
+      currentTime: this.audioContext.currentTime,
+      isWarmedUp: this.isWarmedUp,
+      userAgent: navigator.userAgent
+    };
+  }
+
   destroy(): void {
+    this.isWarmedUp = false;
     this.audioContext.close();
   }
 }

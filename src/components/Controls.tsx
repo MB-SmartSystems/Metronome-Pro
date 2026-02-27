@@ -27,13 +27,13 @@ export default function Controls({ state, onBeatsChange, onSubdivisionsChange }:
           <select 
             value={beatsPerMeasure}
             onChange={(e) => onBeatsChange(parseInt(e.target.value))}
-            className="bg-gray-800 border-2 border-gray-600 text-white px-6 py-3 pr-12 rounded-lg
-                     appearance-none focus:outline-none focus:border-cyan-400 focus:bg-gray-700
+            className="bg-black border-2 border-white text-white px-6 py-3 pr-12 rounded-lg
+                     appearance-none focus:outline-none focus:border-white focus:bg-black
                      text-lg font-bold min-w-[100px] cursor-pointer
-                     hover:border-cyan-300 transition-colors"
+                     hover:border-white/70 transition-colors"
           >
             {beatOptions.map((beats) => (
-              <option key={beats} value={beats} className="bg-gray-800 text-white">
+              <option key={beats} value={beats} className="bg-black text-white">
                 {beats}
               </option>
             ))}
@@ -53,13 +53,13 @@ export default function Controls({ state, onBeatsChange, onSubdivisionsChange }:
           <select 
             value={subdivisions}
             onChange={(e) => onSubdivisionsChange(parseInt(e.target.value))}
-            className="bg-gray-800 border-2 border-gray-600 text-white px-6 py-3 pr-12 rounded-lg
-                     appearance-none focus:outline-none focus:border-cyan-400 focus:bg-gray-700
+            className="bg-black border-2 border-white text-white px-6 py-3 pr-12 rounded-lg
+                     appearance-none focus:outline-none focus:border-white focus:bg-black
                      text-lg font-bold min-w-[100px] cursor-pointer
-                     hover:border-cyan-300 transition-colors"
+                     hover:border-white/70 transition-colors"
           >
             {subdivisionOptions.map((sub) => (
-              <option key={sub} value={sub} className="bg-gray-800 text-white">
+              <option key={sub} value={sub} className="bg-black text-white">
                 {sub}
               </option>
             ))}
