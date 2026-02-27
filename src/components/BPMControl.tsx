@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 
 interface BPMControlProps {
   bpm: number;
@@ -10,155 +10,152 @@ interface BPMControlProps {
 
 export default function BPMControl({ bpm, onBPMChange, disabled }: BPMControlProps) {
   const [inputValue, setInputValue] = useState(bpm.toString());
+  const [tapTimes, setTapTimes] = useState<number[]>([]);
+  const lastTapRef = useRef<number>(0);
+
+  // Sync input value when BPM changes externally
+  useEffect(() => {
+    setInputValue(bpm.toString());
+  }, [bpm]);
 
   const handleInputChange = useCallback((value: string) => {
     setInputValue(value);
     const numValue = parseInt(value, 10);
-    if (!isNaN(numValue) && numValue >= 40 && numValue <= 240) {
+    if (!isNaN(numValue) && numValue >= 40 && numValue <= 300) {
       onBPMChange(numValue);
     }
   }, [onBPMChange]);
 
-  const incrementBPM = useCallback((delta: number) => {
-    const newBPM = Math.max(40, Math.min(240, bpm + delta));
+  const changeBPM = useCallback((delta: number) => {
+    const newBPM = Math.max(40, Math.min(300, bpm + delta));
     onBPMChange(newBPM);
     setInputValue(newBPM.toString());
   }, [bpm, onBPMChange]);
 
-  // Preset BPM values
-  const presets = [60, 80, 100, 120, 140, 160, 180];
+  // Verbessertes Tap-Tempo: Durchschnitt der letzten 8 Schläge
+  const handleTap = useCallback(() => {
+    const now = Date.now();
+    const newTapTimes = [...tapTimes, now].slice(-8); // Letzte 8 Taps behalten
+    setTapTimes(newTapTimes);
+    
+    if (newTapTimes.length >= 2) {
+      // Berechne Intervalle zwischen allen aufeinanderfolgenden Taps
+      const intervals = [];
+      for (let i = 1; i < newTapTimes.length; i++) {
+        intervals.push(newTapTimes[i] - newTapTimes[i - 1]);
+      }
+      
+      // Durchschnitt aller Intervalle
+      const avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
+      const calculatedBPM = Math.round(60000 / avgInterval);
+      
+      // Validierung und Anwendung
+      if (calculatedBPM >= 40 && calculatedBPM <= 300) {
+        onBPMChange(calculatedBPM);
+        setInputValue(calculatedBPM.toString());
+      }
+    }
+    
+    lastTapRef.current = now;
+  }, [tapTimes, onBPMChange]);
+
+  // Reset tap times if too much time has passed
+  useEffect(() => {
+    const resetTapTimes = () => {
+      if (tapTimes.length > 0 && Date.now() - lastTapRef.current > 3000) {
+        setTapTimes([]);
+      }
+    };
+    
+    const interval = setInterval(resetTapTimes, 1000);
+    return () => clearInterval(interval);
+  }, [tapTimes.length]);
 
   return (
-    <div className="flex flex-col items-center space-y-6 p-6">
-      {/* Main BPM display */}
-      <div className="text-center">
-        <label className="text-sm text-metronom-muted mb-2 block">
-          BPM (Beats Per Minute)
-        </label>
-        
-        <div className="flex items-center space-x-4">
-          {/* Decrement buttons */}
-          <div className="flex flex-col space-y-2">
-            <button
-              onClick={() => incrementBPM(-10)}
-              disabled={disabled || bpm <= 40}
-              className="w-12 h-8 bg-metronom-surface border border-metronom-muted 
-                       hover:bg-metronom-muted/20 disabled:opacity-50 disabled:cursor-not-allowed
-                       rounded text-sm font-bold text-metronom-text transition-colors"
-            >
-              -10
-            </button>
-            <button
-              onClick={() => incrementBPM(-1)}
-              disabled={disabled || bpm <= 40}
-              className="w-12 h-8 bg-metronom-surface border border-metronom-muted 
-                       hover:bg-metronom-muted/20 disabled:opacity-50 disabled:cursor-not-allowed
-                       rounded text-sm font-bold text-metronom-text transition-colors"
-            >
-              -1
-            </button>
-          </div>
-
-          {/* BPM Input */}
-          <div className="text-center">
-            <input
-              type="number"
-              value={inputValue}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onBlur={() => setInputValue(bpm.toString())}
-              disabled={disabled}
-              min={40}
-              max={240}
-              className="w-24 h-16 text-4xl font-mono font-bold text-center 
-                       bg-metronom-surface border-2 border-metronom-primary 
-                       rounded-lg text-metronom-text
-                       focus:outline-none focus:border-metronom-accent
-                       disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-            <div className="text-xs text-metronom-muted mt-1">
-              {(60 / bpm).toFixed(2)}s per beat
-            </div>
-          </div>
-
-          {/* Increment buttons */}
-          <div className="flex flex-col space-y-2">
-            <button
-              onClick={() => incrementBPM(1)}
-              disabled={disabled || bpm >= 240}
-              className="w-12 h-8 bg-metronom-surface border border-metronom-muted 
-                       hover:bg-metronom-muted/20 disabled:opacity-50 disabled:cursor-not-allowed
-                       rounded text-sm font-bold text-metronom-text transition-colors"
-            >
-              +1
-            </button>
-            <button
-              onClick={() => incrementBPM(10)}
-              disabled={disabled || bpm >= 240}
-              className="w-12 h-8 bg-metronom-surface border border-metronom-muted 
-                       hover:bg-metronom-muted/20 disabled:opacity-50 disabled:cursor-not-allowed
-                       rounded text-sm font-bold text-metronom-text transition-colors"
-            >
-              +10
-            </button>
-          </div>
-        </div>
+    <div className="flex items-center justify-center space-x-8">
+      {/* Left Controls */}
+      <div className="flex flex-col items-center space-y-3">
+        <button
+          onClick={() => changeBPM(-5)}
+          disabled={disabled || bpm <= 40}
+          className="w-12 h-12 rounded-full border-2 border-white bg-black text-white font-bold text-sm
+                   hover:bg-white hover:text-black active:scale-95 transition-all duration-150
+                   disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:text-white"
+        >
+          -5
+        </button>
+        <button
+          onClick={() => changeBPM(-1)}
+          disabled={disabled || bpm <= 40}
+          className="w-12 h-12 rounded-full border-2 border-white bg-black text-white font-bold text-sm
+                   hover:bg-white hover:text-black active:scale-95 transition-all duration-150
+                   disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:text-white"
+        >
+          -1
+        </button>
       </div>
 
-      {/* BPM Range Slider */}
-      <div className="w-full max-w-md">
-        <input
-          type="range"
-          min={40}
-          max={240}
-          value={bpm}
-          onChange={(e) => {
-            const newBPM = parseInt(e.target.value, 10);
-            onBPMChange(newBPM);
-            setInputValue(newBPM.toString());
-          }}
-          disabled={disabled}
-          className="w-full h-2 bg-metronom-surface rounded-lg appearance-none cursor-pointer
-                   disabled:opacity-50 disabled:cursor-not-allowed
-                   slider"
-          style={{
-            background: `linear-gradient(to right, 
-              #22c55e 0%, 
-              #22c55e ${((bpm - 40) / (240 - 40)) * 100}%, 
-              #1a1a1a ${((bpm - 40) / (240 - 40)) * 100}%, 
-              #1a1a1a 100%)`
-          }}
-        />
-        <div className="flex justify-between text-xs text-metronom-muted mt-1">
-          <span>40</span>
-          <span>240</span>
-        </div>
-      </div>
-
-      {/* Preset BPMs */}
-      <div className="flex flex-wrap gap-2 justify-center">
-        <span className="text-xs text-metronom-muted mb-2 w-full text-center">
-          Quick presets:
-        </span>
-        {presets.map((preset) => (
-          <button
-            key={preset}
-            onClick={() => {
-              onBPMChange(preset);
-              setInputValue(preset.toString());
-            }}
+      {/* Central BPM Display */}
+      <div className="flex flex-col items-center">
+        {/* Clickable BPM Display */}
+        <div className="text-center mb-2">
+          <input
+            type="number"
+            value={inputValue}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onBlur={() => setInputValue(bpm.toString())}
+            onFocus={(e) => e.target.select()}
             disabled={disabled}
-            className={`
-              px-3 py-1 rounded text-sm font-medium transition-colors
-              ${bpm === preset 
-                ? 'bg-metronom-primary text-metronom-bg' 
-                : 'bg-metronom-surface border border-metronom-muted text-metronom-text hover:bg-metronom-muted/20'
-              }
-              disabled:opacity-50 disabled:cursor-not-allowed
-            `}
-          >
-            {preset}
-          </button>
-        ))}
+            min={40}
+            max={300}
+            className="w-32 h-20 text-6xl font-mono font-bold text-center 
+                     bg-transparent border-none text-white outline-none
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <div className="text-white text-lg font-medium">BPM</div>
+          <div className="text-white/60 text-sm">
+            {(60 / bpm).toFixed(2)}s/beat
+          </div>
+        </div>
+
+        {/* Tap Tempo Button */}
+        <button
+          onClick={handleTap}
+          disabled={disabled}
+          className="px-6 py-2 border-2 border-white/60 bg-black text-white font-bold text-lg rounded-full
+                   hover:border-white hover:bg-white hover:text-black active:scale-95 transition-all duration-150
+                   disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          TAP
+        </button>
+        {tapTimes.length > 0 && (
+          <div className="text-white/60 text-xs mt-1">
+            {tapTimes.length}/8 taps
+          </div>
+        )}
+      </div>
+
+      {/* Right Controls */}
+      <div className="flex flex-col items-center space-y-3">
+        <button
+          onClick={() => changeBPM(5)}
+          disabled={disabled || bpm >= 300}
+          className="w-12 h-12 rounded-full border-2 border-white bg-black text-white font-bold text-sm
+                   hover:bg-white hover:text-black active:scale-95 transition-all duration-150
+                   disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:text-white"
+        >
+          +5
+        </button>
+        <button
+          onClick={() => changeBPM(1)}
+          disabled={disabled || bpm >= 300}
+          className="w-12 h-12 rounded-full border-2 border-white bg-black text-white font-bold text-sm
+                   hover:bg-white hover:text-black active:scale-95 transition-all duration-150
+                   disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:text-white"
+        >
+          +1
+        </button>
       </div>
     </div>
   );

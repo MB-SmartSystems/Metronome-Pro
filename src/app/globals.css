@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom animations for metronome */
+@keyframes pulse-beat {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.9; }
+}
+
+@keyframes flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.animate-pulse-beat {
+  animation: pulse-beat 0.15s ease-in-out;
+}
+
+.animate-flash {
+  animation: flash 0.1s ease-in-out;
+}
+
 /* CSS Custom Properties */
 :root {
   --font-inter: Inter, system-ui, sans-serif;

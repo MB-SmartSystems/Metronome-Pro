@@ -2,9 +2,11 @@
 // Uses high-resolution timer and shared buffers
 
 export interface WorkerMessage {
-  type: 'start' | 'stop' | 'setBPM' | 'setSubdivisions' | 'tick';
+  type: 'start' | 'stop' | 'setBPM' | 'setSubdivisions' | 'setBeatsPerMeasure' | 'setBeatPattern' | 'tick';
   bpm?: number;
   subdivisions?: number;
+  beats?: number;
+  pattern?: string[];
   audioContextTime?: number;
 }
 

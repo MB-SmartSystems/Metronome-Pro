@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { MetronomeEngine } from './metronome-engine';
-import { MetronomeState, SoundType } from '@/types/metronome';
+import { MetronomeState, SoundType, BeatLevel, AccentColor } from '@/types/metronome';
 
 export function useMetronome() {
   const engineRef = useRef<MetronomeEngine | null>(null);
@@ -10,9 +10,12 @@ export function useMetronome() {
     isPlaying: false,
     bpm: 120,
     subdivisions: 1,
+    beatsPerMeasure: 4,
     currentBeat: 1,
     currentSubdivision: 1,
-    soundType: 'click'
+    soundType: 'click',
+    accentColor: 'red',
+    beatPattern: ['accent', 'normal', 'normal', 'normal']
   });
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +82,14 @@ export function useMetronome() {
     }
   }, []);
 
+  // Set beats per measure
+  const setBeatsPerMeasure = useCallback((beats: number) => {
+    if (engineRef.current) {
+      engineRef.current.setBeatsPerMeasure(beats);
+      setState(engineRef.current.getState());
+    }
+  }, []);
+
   // Set sound type
   const setSoundType = useCallback((type: SoundType) => {
     if (engineRef.current) {
@@ -87,16 +98,56 @@ export function useMetronome() {
     }
   }, []);
 
-  // Event-based state synchronization for precise beat timing
+  // Set accent color
+  const setAccentColor = useCallback((color: AccentColor) => {
+    if (engineRef.current) {
+      engineRef.current.setAccentColor(color);
+      setState(engineRef.current.getState());
+    }
+  }, []);
+
+  // Set beat level (accent, normal, muted)
+  const setBeatLevel = useCallback((beatIndex: number, level: BeatLevel) => {
+    if (engineRef.current) {
+      engineRef.current.setBeatLevel(beatIndex, level);
+      setState(engineRef.current.getState());
+    }
+  }, []);
+
+  // Cycle beat level (normal → accent → muted → normal)
+  const cycleBeatLevel = useCallback((beatIndex: number) => {
+    if (!engineRef.current) return;
+    
+    const currentState = engineRef.current.getState();
+    const currentLevel = currentState.beatPattern[beatIndex] || 'normal';
+    
+    let newLevel: BeatLevel;
+    switch (currentLevel) {
+      case 'normal':
+        newLevel = 'accent';
+        break;
+      case 'accent':
+        newLevel = 'muted';
+        break;
+      case 'muted':
+        newLevel = 'normal';
+        break;
+      default:
+        newLevel = 'normal';
+    }
+    
+    setBeatLevel(beatIndex, newLevel);
+  }, [setBeatLevel]);
+
+  // Enhanced state synchronization for beat-accurate timing
   useEffect(() => {
     if (!engineRef.current) return;
 
-    // Set up direct event listener on the engine for immediate UI updates
     const syncInterval = setInterval(() => {
       if (engineRef.current) {
         const currentState = engineRef.current.getState();
         setState(prevState => {
-          // Only update if beat actually changed to trigger immediate visual feedback
+          // Update if beat or subdivision changed for immediate visual feedback
           if (prevState.currentBeat !== currentState.currentBeat || 
               prevState.currentSubdivision !== currentState.currentSubdivision ||
               prevState.isPlaying !== currentState.isPlaying) {
@@ -105,7 +156,7 @@ export function useMetronome() {
           return prevState;
         });
       }
-    }, 10); // Much faster sync (10ms) for beat-accurate visual timing
+    }, 5); // Very fast sync (5ms) for beat-accurate visuals
 
     return () => clearInterval(syncInterval);
   }, [isInitialized]);
@@ -130,7 +181,11 @@ export function useMetronome() {
       toggle,
       setBPM,
       setSubdivisions,
-      setSoundType
+      setBeatsPerMeasure,
+      setSoundType,
+      setAccentColor,
+      setBeatLevel,
+      cycleBeatLevel
     }
   };
 }
