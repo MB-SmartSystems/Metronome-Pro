@@ -34,7 +34,6 @@ export function useMetronome() {
       
       // Mobile-specific audio preparation
       if (/Android/i.test(navigator.userAgent)) {
-        console.log('Detected Android - applying mobile optimizations');
         await new Promise(resolve => setTimeout(resolve, 150));
         
         // Test audio capability
@@ -45,7 +44,7 @@ export function useMetronome() {
           }
           await testContext.close();
         } catch (testError) {
-          console.warn('Mobile audio test failed:', testError);
+          console.error('Mobile audio test failed:', testError);
         }
       }
       
@@ -72,7 +71,6 @@ export function useMetronome() {
     
     if (engineRef.current && !state.isPlaying) {
       try {
-        console.log('Starting metronome from beat 1');
         await engineRef.current.start();
         setState(engineRef.current.getState());
         setIsPaused(false);
@@ -86,7 +84,6 @@ export function useMetronome() {
   // Pause metronome (maintains position)
   const pause = useCallback(() => {
     if (engineRef.current && state.isPlaying && !isPaused) {
-      console.log('Pausing metronome');
       engineRef.current.pause();
       setIsPaused(true);
       
@@ -103,7 +100,6 @@ export function useMetronome() {
   const resume = useCallback(async () => {
     if (engineRef.current && !state.isPlaying && isPaused) {
       try {
-        console.log('Resuming metronome from current position');
         await engineRef.current.resume();
         setState(engineRef.current.getState());
         setIsPaused(false);
@@ -117,7 +113,6 @@ export function useMetronome() {
   // Stop metronome (resets to beat 1)
   const stop = useCallback(() => {
     if (engineRef.current && (state.isPlaying || isPaused)) {
-      console.log('Stopping metronome - resetting to beat 1');
       engineRef.current.stop();
       setState(engineRef.current.getState());
       setIsPaused(false);
@@ -141,9 +136,6 @@ export function useMetronome() {
   // Set BPM with live update support
   const setBPM = useCallback((bpm: number) => {
     if (engineRef.current) {
-      const wasPlaying = state.isPlaying;
-      console.log(`Setting BPM to ${bpm}${wasPlaying ? ' (live update)' : ''}`);
-      
       engineRef.current.setBPM(bpm);
       setState(engineRef.current.getState());
       
@@ -154,9 +146,6 @@ export function useMetronome() {
   // Set subdivisions with live update support
   const setSubdivisions = useCallback((subdivisions: number) => {
     if (engineRef.current) {
-      const wasPlaying = state.isPlaying;
-      console.log(`Setting subdivisions to ${subdivisions}${wasPlaying ? ' (live update)' : ''}`);
-      
       engineRef.current.setSubdivisions(subdivisions);
       setState(engineRef.current.getState());
       
@@ -167,7 +156,6 @@ export function useMetronome() {
   // Set beats per measure
   const setBeatsPerMeasure = useCallback((beats: number) => {
     if (engineRef.current) {
-      console.log(`Setting beats per measure to ${beats}`);
       engineRef.current.setBeatsPerMeasure(beats);
       setState(engineRef.current.getState());
     }
@@ -259,7 +247,6 @@ export function useMetronome() {
   useEffect(() => {
     return () => {
       if (engineRef.current) {
-        console.log('Cleaning up metronome engine');
         engineRef.current.destroy();
         engineRef.current = null;
       }

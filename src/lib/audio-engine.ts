@@ -45,13 +45,6 @@ export class AudioEngine {
     await this.warmUpAudioPipeline();
     
     this.isWarmedUp = true;
-    
-    console.log('Audio engine initialized', {
-      state: this.audioContext.state,
-      sampleRate: this.audioContext.sampleRate,
-      baseLatency: this.audioContext.baseLatency,
-      outputLatency: this.audioContext.outputLatency
-    });
   }
 
   private async warmUpAudioPipeline(): Promise<void> {
@@ -90,10 +83,8 @@ export class AudioEngine {
       
       // Wait for warm-up completion
       await new Promise(resolve => setTimeout(resolve, 100));
-      
-      console.log('Audio pipeline warmed up successfully');
     } catch (error) {
-      console.warn('Audio pipeline warm-up failed:', error);
+      console.error('Audio pipeline warm-up failed:', error);
     }
   }
 
@@ -186,15 +177,13 @@ export class AudioEngine {
       return source;
       
     } catch (error) {
-      console.warn('Audio playback error:', error);
+      console.error('Audio playback error:', error);
       return null;
     }
   }
 
   // CRITICAL: Immediately stop all audio sources
   stopAllSounds(): void {
-    console.log(`Stopping ${this.activeSources.size} active audio sources`);
-    
     const sources = Array.from(this.activeSources);
     this.activeSources.clear();
     
@@ -213,7 +202,7 @@ export class AudioEngine {
       this.masterGain.connect(this.audioContext.destination);
     } catch (e) {
       // Handle reconnection errors
-      console.warn('Master gain reconnection error:', e);
+      console.error('Master gain reconnection error:', e);
     }
   }
 
@@ -259,7 +248,7 @@ export class AudioEngine {
       const isReady = this.audioContext.state === 'running' && this.isWarmedUp;
       
       if (!isReady) {
-        console.warn('Audio not ready:', {
+        console.error('Audio not ready:', {
           state: this.audioContext.state,
           warmedUp: this.isWarmedUp
         });
@@ -287,8 +276,6 @@ export class AudioEngine {
   }
 
   destroy(): void {
-    console.log('Destroying audio engine');
-    
     // Stop all active sources
     this.stopAllSounds();
     
@@ -304,9 +291,9 @@ export class AudioEngine {
     
     // Close asynchronously to avoid blocking
     this.audioContext.close().then(() => {
-      console.log('Audio context closed successfully');
+      // Audio context closed successfully
     }).catch(error => {
-      console.warn('Audio context close error:', error);
+      console.error('Audio context close error:', error);
     });
   }
 }
