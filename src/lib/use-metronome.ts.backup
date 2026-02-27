@@ -11,14 +11,13 @@ export function useMetronome() {
     bpm: 120,
     subdivisions: 1,
     beatsPerMeasure: 4,
-    currentBeat: 1, // CRITICAL: Always starts at 1
+    currentBeat: 1,
     currentSubdivision: 1,
     soundType: 'click',
     accentColor: 'red',
     beatPattern: ['accent', 'normal', 'normal', 'normal']
   });
   const [isInitialized, setIsInitialized] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Initialize metronome engine
@@ -26,24 +25,25 @@ export function useMetronome() {
     if (engineRef.current || isInitialized) return;
 
     try {
-      setError(null);
-      console.log('Initializing metronome engine...');
+      setError(null); // Clear any previous errors
       
       const engine = new MetronomeEngine();
+      
+      // Initialize with mobile-specific handling
       await engine.initialize();
       
-      // Mobile-specific audio preparation
+      // Additional mobile audio preparation
       if (/Android/i.test(navigator.userAgent)) {
-        console.log('Detected Android - applying mobile optimizations');
-        await new Promise(resolve => setTimeout(resolve, 150));
+        // Give mobile audio system extra time to fully initialize
+        await new Promise(resolve => setTimeout(resolve, 200));
         
-        // Test audio capability
+        // Test audio capability with silent playback
         try {
-          const testContext = new AudioContext();
-          if (testContext.state === 'suspended') {
-            await testContext.resume();
+          const testAudioContext = new AudioContext();
+          if (testAudioContext.state === 'suspended') {
+            await testAudioContext.resume();
           }
-          await testContext.close();
+          await testAudioContext.close();
         } catch (testError) {
           console.warn('Mobile audio test failed:', testError);
         }
@@ -51,7 +51,6 @@ export function useMetronome() {
       
       engineRef.current = engine;
       setIsInitialized(true);
-      setIsPaused(false);
       
       // Sync initial state
       setState(engine.getState());
@@ -64,18 +63,30 @@ export function useMetronome() {
     }
   }, [isInitialized]);
 
-  // Start metronome (always from beat 1)
+  // Start metronome
   const start = useCallback(async () => {
     if (!engineRef.current) {
       await initialize();
     }
     
     if (engineRef.current && !state.isPlaying) {
+      // CRITICAL: Ensure audio system is fully ready before starting
+      // This prevents the 3-4 beat delay on first start
       try {
-        console.log('Starting metronome from beat 1');
+        // Force audio context to be fully active
+        const audioContext = (engineRef.current as any).audioEngine?.audioContext;
+        if (audioContext && audioContext.state === 'suspended') {
+          await audioContext.resume();
+        }
+        
+        // Small delay to ensure mobile audio system is ready
+        // This is especially important on Samsung devices
+        if (/Android/i.test(navigator.userAgent)) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
         await engineRef.current.start();
         setState(engineRef.current.getState());
-        setIsPaused(false);
       } catch (error) {
         console.error('Failed to start metronome:', error);
         setError('Failed to start metronome. Please try again.');
@@ -83,91 +94,42 @@ export function useMetronome() {
     }
   }, [initialize, state.isPlaying]);
 
-  // Pause metronome (maintains position)
-  const pause = useCallback(() => {
-    if (engineRef.current && state.isPlaying && !isPaused) {
-      console.log('Pausing metronome');
-      engineRef.current.pause();
-      setIsPaused(true);
-      
-      // Update state to show paused but maintain position
-      const currentState = engineRef.current.getState();
-      setState({
-        ...currentState,
-        isPlaying: false // UI shows paused state
-      });
-    }
-  }, [state.isPlaying, isPaused]);
-
-  // Resume metronome (from current position)
-  const resume = useCallback(async () => {
-    if (engineRef.current && !state.isPlaying && isPaused) {
-      try {
-        console.log('Resuming metronome from current position');
-        await engineRef.current.resume();
-        setState(engineRef.current.getState());
-        setIsPaused(false);
-      } catch (error) {
-        console.error('Failed to resume metronome:', error);
-        setError('Failed to resume metronome. Please try again.');
-      }
-    }
-  }, [state.isPlaying, isPaused]);
-
-  // Stop metronome (resets to beat 1)
+  // Stop metronome
   const stop = useCallback(() => {
-    if (engineRef.current && (state.isPlaying || isPaused)) {
-      console.log('Stopping metronome - resetting to beat 1');
+    if (engineRef.current && state.isPlaying) {
       engineRef.current.stop();
       setState(engineRef.current.getState());
-      setIsPaused(false);
     }
-  }, [state.isPlaying, isPaused]);
+  }, [state.isPlaying]);
 
-  // Smart toggle: play/pause if started, start if stopped
+  // Toggle play/stop
   const toggle = useCallback(() => {
-    if (!state.isPlaying && !isPaused) {
-      // Completely stopped - start from beginning
+    if (state.isPlaying) {
+      stop();
+    } else {
       start();
-    } else if (state.isPlaying && !isPaused) {
-      // Playing - pause
-      pause();
-    } else if (!state.isPlaying && isPaused) {
-      // Paused - resume
-      resume();
     }
-  }, [state.isPlaying, isPaused, start, pause, resume]);
+  }, [state.isPlaying, start, stop]);
 
-  // Set BPM with live update support
+  // Set BPM
   const setBPM = useCallback((bpm: number) => {
     if (engineRef.current) {
-      const wasPlaying = state.isPlaying;
-      console.log(`Setting BPM to ${bpm}${wasPlaying ? ' (live update)' : ''}`);
-      
       engineRef.current.setBPM(bpm);
       setState(engineRef.current.getState());
-      
-      // No need to restart - live updates work!
     }
-  }, [state.isPlaying]);
+  }, []);
 
-  // Set subdivisions with live update support
+  // Set subdivisions
   const setSubdivisions = useCallback((subdivisions: number) => {
     if (engineRef.current) {
-      const wasPlaying = state.isPlaying;
-      console.log(`Setting subdivisions to ${subdivisions}${wasPlaying ? ' (live update)' : ''}`);
-      
       engineRef.current.setSubdivisions(subdivisions);
       setState(engineRef.current.getState());
-      
-      // No need to restart - live updates work!
     }
-  }, [state.isPlaying]);
+  }, []);
 
   // Set beats per measure
   const setBeatsPerMeasure = useCallback((beats: number) => {
     if (engineRef.current) {
-      console.log(`Setting beats per measure to ${beats}`);
       engineRef.current.setBeatsPerMeasure(beats);
       setState(engineRef.current.getState());
     }
@@ -222,63 +184,44 @@ export function useMetronome() {
     setBeatLevel(beatIndex, newLevel);
   }, [setBeatLevel]);
 
-  // High-frequency state synchronization for accurate beat display
+  // Enhanced state synchronization for beat-accurate timing
   useEffect(() => {
-    if (!engineRef.current || !isInitialized) return;
+    if (!engineRef.current) return;
 
     const syncInterval = setInterval(() => {
       if (engineRef.current) {
         const currentState = engineRef.current.getState();
-        
         setState(prevState => {
-          // Only update if something actually changed
-          const stateChanged = 
-            prevState.currentBeat !== currentState.currentBeat || 
-            prevState.currentSubdivision !== currentState.currentSubdivision ||
-            prevState.isPlaying !== currentState.isPlaying ||
-            prevState.bpm !== currentState.bpm ||
-            prevState.subdivisions !== currentState.subdivisions;
-          
-          if (stateChanged) {
-            return {
-              ...currentState,
-              // Override playing state if paused
-              isPlaying: isPaused ? false : currentState.isPlaying
-            };
+          // Update if beat or subdivision changed for immediate visual feedback
+          if (prevState.currentBeat !== currentState.currentBeat || 
+              prevState.currentSubdivision !== currentState.currentSubdivision ||
+              prevState.isPlaying !== currentState.isPlaying) {
+            return currentState;
           }
-          
           return prevState;
         });
       }
-    }, 8); // 8ms sync for beat-accurate visuals (125 FPS)
+    }, 5); // Very fast sync (5ms) for beat-accurate visuals
 
     return () => clearInterval(syncInterval);
-  }, [isInitialized, isPaused]);
+  }, [isInitialized]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (engineRef.current) {
-        console.log('Cleaning up metronome engine');
         engineRef.current.destroy();
-        engineRef.current = null;
       }
     };
   }, []);
 
   return {
-    state: {
-      ...state,
-      // Expose pause state for UI
-      isPaused
-    },
+    state,
     isInitialized,
     error,
     actions: {
       initialize,
       start,
-      pause,
-      resume,
       stop,
       toggle,
       setBPM,

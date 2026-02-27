@@ -36,14 +36,14 @@ export default function SubdivisionControl({
     <div className="flex flex-col items-center space-y-6 p-6">
       {/* Title */}
       <div className="text-center">
-        <h3 className="text-lg font-semibold text-metronom-text mb-1">
+        <h3 className="text-lg font-semibold text-white mb-1">
           Subdivisions
         </h3>
-        <p className="text-sm text-metronom-muted">
+        <p className="text-sm text-white/60">
           {eventsPerSecond.toFixed(1)} events/sec
         </p>
         {eventsPerSecond > 20 && (
-          <p className="text-xs text-metronom-accent mt-1">
+          <p className="text-xs text-red-400 mt-1">
             ⚠️ High frequency mode
           </p>
         )}
@@ -65,10 +65,10 @@ export default function SubdivisionControl({
                 relative p-4 rounded-lg border-2 transition-all duration-200
                 flex flex-col items-center space-y-1
                 ${isSelected 
-                  ? 'bg-metronom-primary border-metronom-primary text-metronom-bg shadow-lg' 
-                  : 'bg-metronom-surface border-metronom-muted text-metronom-text hover:border-metronom-primary/50'
+                  ? 'bg-white border-white text-black shadow-lg' 
+                  : 'bg-black border-white/30 text-white hover:border-white/60'
                 }
-                ${isHighFreq && !isSelected ? 'border-metronom-accent/50' : ''}
+                ${isHighFreq && !isSelected ? 'border-red-400/50' : ''}
                 disabled:opacity-50 disabled:cursor-not-allowed
               `}
             >
@@ -100,10 +100,10 @@ export default function SubdivisionControl({
 
       {/* Visual representation */}
       <div className="w-full max-w-md">
-        <div className="text-xs text-metronom-muted mb-2 text-center">
+        <div className="text-xs text-white/60 mb-2 text-center">
           Beat pattern preview:
         </div>
-        <div className="flex items-center justify-center space-x-1 p-4 bg-metronom-surface rounded-lg">
+        <div className="flex items-center justify-center space-x-1 p-4 bg-black border border-white/20 rounded-lg">
           {/* One beat with subdivisions */}
           {Array.from({ length: subdivisions }, (_, i) => (
             <div
@@ -111,8 +111,8 @@ export default function SubdivisionControl({
               className={`
                 w-3 h-3 rounded-full
                 ${i === 0 
-                  ? 'bg-metronom-accent' 
-                  : 'bg-metronom-primary'
+                  ? 'bg-red-400' 
+                  : 'bg-white'
                 }
               `}
               title={i === 0 ? 'Accent' : 'Subdivision'}
@@ -120,7 +120,7 @@ export default function SubdivisionControl({
           ))}
           
           {/* Separator */}
-          <div className="w-px h-6 bg-metronom-muted mx-2" />
+          <div className="w-px h-6 bg-white/30 mx-2" />
           
           {/* Next beat (normal) */}
           {Array.from({ length: subdivisions }, (_, i) => (
@@ -129,8 +129,8 @@ export default function SubdivisionControl({
               className={`
                 w-3 h-3 rounded-full
                 ${i === 0 
-                  ? 'bg-metronom-text opacity-60' 
-                  : 'bg-metronom-primary opacity-40'
+                  ? 'bg-white opacity-60' 
+                  : 'bg-white opacity-40'
                 }
               `}
               title={i === 0 ? 'Normal beat' : 'Subdivision'}
@@ -139,17 +139,17 @@ export default function SubdivisionControl({
         </div>
         
         {/* Legend */}
-        <div className="flex justify-center space-x-4 mt-2 text-xs text-metronom-muted">
+        <div className="flex justify-center space-x-4 mt-2 text-xs text-white/60">
           <div className="flex items-center space-x-1">
-            <div className="w-2 h-2 bg-metronom-accent rounded-full" />
+            <div className="w-2 h-2 bg-red-400 rounded-full" />
             <span>Accent</span>
           </div>
           <div className="flex items-center space-x-1">
-            <div className="w-2 h-2 bg-metronom-text opacity-60 rounded-full" />
+            <div className="w-2 h-2 bg-white opacity-60 rounded-full" />
             <span>Normal</span>
           </div>
           <div className="flex items-center space-x-1">
-            <div className="w-2 h-2 bg-metronom-primary rounded-full" />
+            <div className="w-2 h-2 bg-white rounded-full" />
             <span>Subdivision</span>
           </div>
         </div>

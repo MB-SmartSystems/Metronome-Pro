@@ -5,23 +5,31 @@ export class AudioEngine {
   private bufferPool: AudioBufferPool | null = null;
   private config: AudioConfig;
   private isWarmedUp = false;
+  private activeSources: Set<AudioBufferSourceNode> = new Set();
+  private masterGain: GainNode;
   
   constructor() {
-    // Samsung S23 optimization - detect and adjust for high-end Android devices
+    // Samsung S23 and high-end device optimization
     const isSamsungHighEnd = /Android.*SM-S9\d\d/i.test(navigator.userAgent);
+    const isHighEndDevice = /Android.*SM-S|iPhone1[3-9]|iPhone[2-9]/i.test(navigator.userAgent);
     
     this.config = {
       sampleRate: 44100,
-      bufferSize: isSamsungHighEnd ? 128 : 256, // Smaller buffer for Samsung S23+
-      lookaheadTime: isSamsungHighEnd ? 0.012 : 0.015, // Tighter timing for high-end devices
-      scheduleInterval: isSamsungHighEnd ? 0.008 : 0.010 // More aggressive scheduling for Samsung
+      bufferSize: isSamsungHighEnd ? 128 : (isHighEndDevice ? 256 : 512),
+      lookaheadTime: isSamsungHighEnd ? 0.010 : (isHighEndDevice ? 0.012 : 0.015),
+      scheduleInterval: isSamsungHighEnd ? 0.006 : (isHighEndDevice ? 0.008 : 0.010)
     };
     
-    // Create AudioContext with optimal settings for mobile
+    // Create AudioContext with optimal settings
     this.audioContext = new AudioContext({
       sampleRate: this.config.sampleRate,
-      latencyHint: 'interactive', // Changed from 'playback' to 'interactive' for lower latency
+      latencyHint: 'interactive', // Critical for low latency
     });
+
+    // Create master gain node for volume control and cleanup
+    this.masterGain = this.audioContext.createGain();
+    this.masterGain.gain.value = 1.0;
+    this.masterGain.connect(this.audioContext.destination);
   }
 
   async initialize(): Promise<void> {
@@ -33,22 +41,27 @@ export class AudioEngine {
     // Create audio buffer pool
     this.bufferPool = await this.createAudioBuffers();
     
-    // CRITICAL: Warm up audio pipeline with silent playback
+    // CRITICAL: Warm up audio pipeline
     await this.warmUpAudioPipeline();
     
     this.isWarmedUp = true;
+    
+    console.log('Audio engine initialized', {
+      state: this.audioContext.state,
+      sampleRate: this.audioContext.sampleRate,
+      baseLatency: this.audioContext.baseLatency,
+      outputLatency: this.audioContext.outputLatency
+    });
   }
 
   private async warmUpAudioPipeline(): Promise<void> {
     if (!this.bufferPool) return;
     
-    // Play silent sound to initialize audio pipeline
-    // This primes the entire audio system for immediate response
-    const silentBuffer = this.createSilentBuffer(0.001); // 1ms silent
-    
     try {
-      // Play multiple silent sounds to fully warm up the pipeline
-      for (let i = 0; i < 3; i++) {
+      // Play multiple silent sounds to prime the entire audio pipeline
+      const silentBuffer = this.createSilentBuffer(0.001);
+      
+      for (let i = 0; i < 5; i++) {
         const source = this.audioContext.createBufferSource();
         const gainNode = this.audioContext.createGain();
         
@@ -56,20 +69,29 @@ export class AudioEngine {
         gainNode.gain.value = 0; // Silent
         
         source.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
+        gainNode.connect(this.masterGain);
         
-        const startTime = this.audioContext.currentTime + (i * 0.01);
+        const startTime = this.audioContext.currentTime + (i * 0.005); // 5ms apart
         source.start(startTime);
         
-        // Wait a bit between warm-up sounds
-        if (i < 2) {
-          await new Promise(resolve => setTimeout(resolve, 10));
+        // Auto cleanup
+        source.onended = () => {
+          try {
+            gainNode.disconnect();
+          } catch (e) {
+            // Already disconnected
+          }
+        };
+        
+        if (i < 4) {
+          await new Promise(resolve => setTimeout(resolve, 5));
         }
       }
       
-      // Wait for warm-up to complete
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Wait for warm-up completion
+      await new Promise(resolve => setTimeout(resolve, 100));
       
+      console.log('Audio pipeline warmed up successfully');
     } catch (error) {
       console.warn('Audio pipeline warm-up failed:', error);
     }
@@ -78,19 +100,19 @@ export class AudioEngine {
   private createSilentBuffer(duration: number): AudioBuffer {
     const frameCount = duration * this.audioContext.sampleRate;
     const buffer = this.audioContext.createBuffer(1, frameCount, this.audioContext.sampleRate);
-    // Buffer is already silent (zeros), no need to fill
+    // Buffer is already silent (zeros)
     return buffer;
   }
 
   private async createAudioBuffers(): Promise<AudioBufferPool> {
-    const duration = 0.1; // 100ms buffers
+    const duration = 0.08; // 80ms buffers - shorter for cleaner sound
     const sampleRate = this.audioContext.sampleRate;
     const frameCount = duration * sampleRate;
 
     return {
-      accent: this.createClickBuffer(frameCount, 1000, 0.8), // 1000Hz, loud
-      normal: this.createClickBuffer(frameCount, 800, 0.6),  // 800Hz, normal  
-      subdivision: this.createClickBuffer(frameCount, 600, 0.4) // 600Hz, soft
+      accent: this.createClickBuffer(frameCount, 1000, 0.9), // 1000Hz, loud and clear
+      normal: this.createClickBuffer(frameCount, 800, 0.7),  // 800Hz, normal volume  
+      subdivision: this.createClickBuffer(frameCount, 600, 0.4) // 600Hz, softer
     };
   }
 
@@ -98,114 +120,100 @@ export class AudioEngine {
     const buffer = this.audioContext.createBuffer(1, frameCount, this.audioContext.sampleRate);
     const channelData = buffer.getChannelData(0);
     
-    const attackTime = 0.001; // 1ms attack
-    const decayTime = 0.05;   // 50ms decay
+    const attackTime = 0.001; // 1ms sharp attack
+    const decayTime = 0.04;   // 40ms decay
     const attackSamples = attackTime * this.audioContext.sampleRate;
-    const decayStart = attackSamples;
     const decayEnd = decayTime * this.audioContext.sampleRate;
     
     for (let i = 0; i < frameCount; i++) {
       const t = i / this.audioContext.sampleRate;
       let amplitude = gain;
       
-      // Envelope (sharp attack, exponential decay)
+      // Sharp envelope for precise click
       if (i < attackSamples) {
         amplitude *= i / attackSamples; // Linear attack
       } else if (i < decayEnd) {
-        const decayProgress = (i - decayStart) / (decayEnd - decayStart);
-        amplitude *= Math.exp(-decayProgress * 5); // Exponential decay
+        const decayProgress = (i - attackSamples) / (decayEnd - attackSamples);
+        amplitude *= Math.exp(-decayProgress * 6); // Fast exponential decay
       } else {
         amplitude = 0;
       }
       
-      // Generate sine wave with slight harmonics for click character
+      // Clean sine wave with minimal harmonics
       channelData[i] = amplitude * (
         Math.sin(2 * Math.PI * frequency * t) + 
-        0.1 * Math.sin(2 * Math.PI * frequency * 2 * t) // 2nd harmonic
+        0.05 * Math.sin(2 * Math.PI * frequency * 2 * t) // Very subtle 2nd harmonic
       );
     }
     
     return buffer;
   }
 
-  private createClaveBuffer(frameCount: number, gain: number): AudioBuffer {
-    const buffer = this.audioContext.createBuffer(1, frameCount, this.audioContext.sampleRate);
-    const channelData = buffer.getChannelData(0);
-    
-    // Simulate wood block hit with multiple frequencies
-    const fundamentals = [400, 800, 1200, 1600]; // Wood resonance frequencies
-    const attackTime = 0.002; // 2ms attack
-    const decayTime = 0.08;   // 80ms decay
-    
-    for (let i = 0; i < frameCount; i++) {
-      const t = i / this.audioContext.sampleRate;
-      let sample = 0;
-      
-      // Envelope
-      let amplitude = gain;
-      if (t < attackTime) {
-        amplitude *= t / attackTime;
-      } else {
-        amplitude *= Math.exp(-(t - attackTime) / 0.03); // Fast decay
-      }
-      
-      // Mix multiple frequencies for wood character
-      for (let j = 0; j < fundamentals.length; j++) {
-        const freq = fundamentals[j];
-        const harmonic_gain = 1 / (j + 1); // Decreasing harmonics
-        sample += harmonic_gain * Math.sin(2 * Math.PI * freq * t);
-      }
-      
-      channelData[i] = amplitude * sample * 0.25; // Scale down mixed signal
-    }
-    
-    return buffer;
-  }
-
-  playSound(level: SoundLevel, time: number): void {
-    if (!this.bufferPool || !this.isWarmedUp) return;
+  playSound(level: SoundLevel, time: number): AudioBufferSourceNode | null {
+    if (!this.bufferPool || !this.isWarmedUp) return null;
     
     const currentTime = this.audioContext.currentTime;
-    
-    // Ensure we don't schedule sounds in the past
     const scheduleTime = Math.max(time, currentTime);
     
     try {
       const source = this.audioContext.createBufferSource();
       source.buffer = this.bufferPool[level];
       
-      // Create gain node for mobile audio optimization
+      // Individual gain control for each source
       const gainNode = this.audioContext.createGain();
       gainNode.gain.value = 1.0;
       
-      // Connect: source -> gain -> destination
+      // Connect: source -> gain -> master -> destination
       source.connect(gainNode);
-      gainNode.connect(this.audioContext.destination);
+      gainNode.connect(this.masterGain);
+      
+      // Track active source for cleanup
+      this.activeSources.add(source);
+      
+      // Auto-cleanup when source ends
+      source.onended = () => {
+        this.activeSources.delete(source);
+        try {
+          gainNode.disconnect();
+        } catch (e) {
+          // Already disconnected
+        }
+      };
       
       // Start playback
       source.start(scheduleTime);
       
-      // Mobile-specific: Ensure the source is cleaned up
-      source.onended = () => {
-        try {
-          gainNode.disconnect();
-        } catch (e) {
-          // Ignore disconnect errors
-        }
-      };
+      return source;
       
     } catch (error) {
       console.warn('Audio playback error:', error);
-      
-      // Fallback: Try to play immediately if scheduling failed
+      return null;
+    }
+  }
+
+  // CRITICAL: Immediately stop all audio sources
+  stopAllSounds(): void {
+    console.log(`Stopping ${this.activeSources.size} active audio sources`);
+    
+    const sources = Array.from(this.activeSources);
+    this.activeSources.clear();
+    
+    sources.forEach(source => {
       try {
-        const fallbackSource = this.audioContext.createBufferSource();
-        fallbackSource.buffer = this.bufferPool[level];
-        fallbackSource.connect(this.audioContext.destination);
-        fallbackSource.start(currentTime);
-      } catch (fallbackError) {
-        console.error('Fallback audio playback also failed:', fallbackError);
+        source.stop();
+        source.disconnect();
+      } catch (e) {
+        // Source may already be stopped/disconnected
       }
+    });
+    
+    // Additional cleanup - disconnect and reconnect master gain
+    try {
+      this.masterGain.disconnect();
+      this.masterGain.connect(this.audioContext.destination);
+    } catch (e) {
+      // Handle reconnection errors
+      console.warn('Master gain reconnection error:', e);
     }
   }
 
@@ -213,56 +221,92 @@ export class AudioEngine {
     return this.audioContext.currentTime;
   }
 
-  // Mobile-specific method to handle audio focus and policies
   async ensureAudioReady(): Promise<boolean> {
     try {
-      // Ensure audio context is running
+      // Resume if suspended
       if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
       }
       
-      // For mobile devices, test immediate audio responsiveness
+      // Test on mobile devices
       if (/Android|iOS/i.test(navigator.userAgent)) {
-        const testTime = this.audioContext.currentTime;
-        
-        // Quick audio pipeline test
-        const testSource = this.audioContext.createOscillator();
+        // Quick test to ensure audio pipeline is responsive
+        const testBuffer = this.createSilentBuffer(0.001);
+        const testSource = this.audioContext.createBufferSource();
         const testGain = this.audioContext.createGain();
         
-        testGain.gain.value = 0; // Silent test
-        testSource.connect(testGain);
-        testGain.connect(this.audioContext.destination);
+        testSource.buffer = testBuffer;
+        testGain.gain.value = 0;
         
-        testSource.frequency.value = 440;
+        testSource.connect(testGain);
+        testGain.connect(this.masterGain);
+        
+        const testTime = this.audioContext.currentTime;
         testSource.start(testTime);
         testSource.stop(testTime + 0.001);
         
-        // Small delay for mobile audio to stabilize
-        await new Promise(resolve => setTimeout(resolve, 50));
+        // Small stabilization delay for mobile
+        await new Promise(resolve => setTimeout(resolve, 20));
+        
+        // Cleanup
+        try {
+          testGain.disconnect();
+        } catch (e) {
+          // Already disconnected
+        }
       }
       
-      return this.audioContext.state === 'running' && this.isWarmedUp;
+      const isReady = this.audioContext.state === 'running' && this.isWarmedUp;
+      
+      if (!isReady) {
+        console.warn('Audio not ready:', {
+          state: this.audioContext.state,
+          warmedUp: this.isWarmedUp
+        });
+      }
+      
+      return isReady;
     } catch (error) {
       console.error('Audio readiness check failed:', error);
       return false;
     }
   }
 
-  // Method to get audio system health info for debugging
   getAudioInfo(): object {
     return {
       state: this.audioContext.state,
       sampleRate: this.audioContext.sampleRate,
-      baseLatency: this.audioContext.baseLatency,
-      outputLatency: this.audioContext.outputLatency,
+      baseLatency: this.audioContext.baseLatency || 'unknown',
+      outputLatency: this.audioContext.outputLatency || 'unknown',
       currentTime: this.audioContext.currentTime,
       isWarmedUp: this.isWarmedUp,
-      userAgent: navigator.userAgent
+      activeSources: this.activeSources.size,
+      userAgent: navigator.userAgent,
+      config: this.config
     };
   }
 
   destroy(): void {
+    console.log('Destroying audio engine');
+    
+    // Stop all active sources
+    this.stopAllSounds();
+    
+    // Disconnect master gain
+    try {
+      this.masterGain.disconnect();
+    } catch (e) {
+      // Already disconnected
+    }
+    
+    // Close audio context
     this.isWarmedUp = false;
-    this.audioContext.close();
+    
+    // Close asynchronously to avoid blocking
+    this.audioContext.close().then(() => {
+      console.log('Audio context closed successfully');
+    }).catch(error => {
+      console.warn('Audio context close error:', error);
+    });
   }
 }

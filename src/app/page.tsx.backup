@@ -18,24 +18,27 @@ const ACCENT_COLORS: Record<AccentColor, { bg: string; border: string; shadow: s
   cyan: { bg: 'bg-cyan-400', border: 'border-cyan-400', shadow: 'shadow-cyan-400/30', color: '#22d3ee' },
 };
 
-// PlayStop Button Component with PAUSE/RESUME functionality
-function PlayStopButton({ state, onToggle, isInitialized }: { 
-  state: MetronomeState & { isPaused?: boolean }; 
-  onToggle: () => void; 
-  isInitialized: boolean 
-}) {
+// PlayStop Button Component with dynamic accent color
+function PlayStopButton({ state, onToggle, isInitialized }: { state: MetronomeState; onToggle: () => void; isInitialized: boolean }) {
   const colors = ACCENT_COLORS[state.accentColor];
-  const { isPlaying, isPaused } = state;
   
-  // Button state logic:
-  // - Not playing, not paused = Play button (triangle)
-  // - Playing, not paused = Pause button (two bars)  
-  // - Not playing, paused = Resume button (triangle with different style)
-  
-  const getButtonContent = () => {
-    if (!isPlaying && !isPaused) {
-      // Stopped - Show play icon
-      return (
+  return (
+    <button
+      onClick={onToggle}
+      disabled={!isInitialized}
+      className={`w-24 h-24 border-4 ${colors.border} bg-black rounded-full 
+                 hover:${colors.bg} active:scale-95 transition-all duration-200
+                 flex items-center justify-center group shadow-lg ${colors.shadow}
+                 disabled:opacity-50 disabled:cursor-not-allowed`}
+    >
+      {state.isPlaying ? (
+        // Pause icon - zwei gleich große Rechtecke, perfekt zentriert
+        <div className="flex space-x-1.5">
+          <div className={`w-2.5 h-8 ${colors.bg} group-hover:bg-black`}></div>
+          <div className={`w-2.5 h-8 ${colors.bg} group-hover:bg-black`}></div>
+        </div>
+      ) : (
+        // Play icon - perfekt zentriertes Dreieck
         <div 
           className="w-0 h-0 ml-1"
           style={{
@@ -43,57 +46,13 @@ function PlayStopButton({ state, onToggle, isInitialized }: {
             borderTop: '10px solid transparent',
             borderBottom: '10px solid transparent'
           }}
-        />
-      );
-    } else if (isPlaying && !isPaused) {
-      // Playing - Show pause icon
-      return (
-        <div className="flex space-x-1.5">
-          <div className={`w-2.5 h-8 ${colors.bg} group-hover:bg-black`}></div>
-          <div className={`w-2.5 h-8 ${colors.bg} group-hover:bg-black`}></div>
-        </div>
-      );
-    } else if (!isPlaying && isPaused) {
-      // Paused - Show resume icon (play with indicator)
-      return (
-        <div className="relative">
-          <div 
-            className="w-0 h-0 ml-1"
-            style={{
-              borderLeft: `12px solid ${colors.color}`,
-              borderTop: '10px solid transparent',
-              borderBottom: '10px solid transparent'
-            }}
-          />
-          <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full animate-pulse"></div>
-        </div>
-      );
-    }
-  };
-  
-  const getButtonLabel = () => {
-    if (!isPlaying && !isPaused) return "Start";
-    if (isPlaying && !isPaused) return "Pause";
-    if (!isPlaying && isPaused) return "Resume";
-    return "Toggle";
-  };
-  
-  return (
-    <button
-      onClick={onToggle}
-      disabled={!isInitialized}
-      title={getButtonLabel()}
-      className={`w-24 h-24 border-4 ${colors.border} bg-black rounded-full 
-                 hover:${colors.bg} active:scale-95 transition-all duration-200
-                 flex items-center justify-center group shadow-lg ${colors.shadow}
-                 disabled:opacity-50 disabled:cursor-not-allowed`}
-    >
-      {getButtonContent()}
+        ></div>
+      )}
     </button>
   );
 }
 
-export default function HomePage() {
+export default function HomePageNew() {
   const { state, isInitialized, error, actions } = useMetronome();
   const [showSettings, setShowSettings] = useState(false);
   const [tapTimes, setTapTimes] = useState<number[]>([]);
@@ -110,30 +69,30 @@ export default function HomePage() {
     actions.cycleBeatLevel(beatIndex);
   };
 
-  const handleColorChange = (color: AccentColor) => {
+  const handleColorChange = (color: any) => {
     actions.setAccentColor(color);
-    setShowSettings(false);
+    setShowSettings(false); // Close settings after selection
   };
 
-  // Enhanced TAP-Tempo with better timing
+  // TAP-Tempo mit 8-Schlag-Durchschnitt
   const handleTap = () => {
     const now = Date.now();
-    const newTapTimes = [...tapTimes, now].slice(-8); // Keep last 8 taps
+    const newTapTimes = [...tapTimes, now].slice(-8); // Letzte 8 Taps behalten
     setTapTimes(newTapTimes);
     
     if (newTapTimes.length >= 2) {
+      // Berechne Intervalle zwischen allen aufeinanderfolgenden Taps
       const intervals = [];
       for (let i = 1; i < newTapTimes.length; i++) {
         intervals.push(newTapTimes[i] - newTapTimes[i - 1]);
       }
       
-      // Use median instead of average for better accuracy
-      intervals.sort((a, b) => a - b);
-      const median = intervals[Math.floor(intervals.length / 2)];
-      const calculatedBPM = Math.round(60000 / median);
+      // Durchschnitt aller Intervalle
+      const avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
+      const calculatedBPM = Math.round(60000 / avgInterval);
       
+      // Validierung und Anwendung
       if (calculatedBPM >= 40 && calculatedBPM <= 300) {
-        console.log(`TAP tempo calculated: ${calculatedBPM} BPM from ${newTapTimes.length} taps`);
         actions.setBPM(calculatedBPM);
       }
     }
@@ -143,14 +102,14 @@ export default function HomePage() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4">
         <div className="p-8 max-w-md w-full text-center">
-          <h1 className="text-2xl font-bold text-white mb-4">⚠️ Audio Error</h1>
-          <p className="text-white/80 mb-6 text-sm leading-relaxed">{error}</p>
+          <h1 className="text-2xl font-bold text-white mb-4">Error</h1>
+          <p className="text-white mb-6">{error}</p>
           <button
             onClick={handleInitialize}
             className="w-full py-3 border-2 border-white bg-black text-white font-bold rounded-lg
                      hover:bg-white hover:text-black transition-colors"
           >
-            Retry Initialization
+            Retry
           </button>
         </div>
       </div>
@@ -162,12 +121,10 @@ export default function HomePage() {
       <div className="min-h-screen bg-black flex items-center justify-center p-4">
         <div className="p-8 max-w-md w-full text-center">
           <h1 className="text-3xl font-bold text-white mb-4">
-            🎵 Metronome Pro
+            Metronom Pro
           </h1>
           <p className="text-white/60 mb-6">
             Professional metronome with &lt;10ms latency
-            <br />
-            <span className="text-xs text-white/40">Emergency repair system v2.0</span>
           </p>
           <button
             onClick={handleInitialize}
@@ -186,20 +143,15 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col relative">
-      {/* Header with status */}
+      {/* Header */}
       <header className="flex items-center justify-center p-4 border-b border-white/10 relative">
-        <h1 className="text-2xl font-bold text-white">Metronome Pro</h1>
-        {state.isPaused && (
-          <span className="absolute right-4 text-xs text-yellow-400 bg-yellow-400/20 px-2 py-1 rounded">
-            PAUSED
-          </span>
-        )}
+        <h1 className="text-2xl font-bold text-white">Metronom Pro</h1>
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col justify-center px-6 space-y-6 pb-24">
+      <div className="flex-1 flex flex-col justify-center px-6 space-y-8 pb-24">
         
-        {/* Beat Display */}
+        {/* Beat Display with Settings */}
         <div className="relative">
           <MetronomeDisplay 
             state={state}
@@ -210,10 +162,10 @@ export default function HomePage() {
           />
         </div>
 
-        {/* BPM Control with live update indicator */}
-        <div className="flex items-center justify-center space-x-6">
+        {/* BPM Control ohne TAP */}
+        <div className="flex items-center justify-center space-x-8">
           {/* Left Controls */}
-          <div className="flex flex-col items-center space-x-0 space-y-2">
+          <div className="flex flex-col items-center space-y-3">
             <button
               onClick={() => actions.setBPM(Math.max(40, state.bpm - 5))}
               disabled={!isInitialized || state.bpm <= 40}
@@ -236,7 +188,7 @@ export default function HomePage() {
 
           {/* Central BPM Display */}
           <div className="flex flex-col items-center">
-            <div className="text-center mb-2 relative">
+            <div className="text-center mb-2">
               <input
                 type="number"
                 value={state.bpm}
@@ -255,17 +207,12 @@ export default function HomePage() {
                          disabled:opacity-50 disabled:cursor-not-allowed
                          [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
-              {/* Live update indicator */}
-              {(state.isPlaying || state.isPaused) && (
-                <div className="absolute -top-2 -right-2 w-2 h-2 bg-green-400 rounded-full animate-pulse" 
-                     title="Live updates enabled" />
-              )}
               <div className="text-white text-lg font-medium">BPM</div>
             </div>
           </div>
 
           {/* Right Controls */}
-          <div className="flex flex-col items-center space-x-0 space-y-2">
+          <div className="flex flex-col items-center space-y-3">
             <button
               onClick={() => actions.setBPM(Math.min(300, state.bpm + 5))}
               disabled={!isInitialized || state.bpm >= 300}
@@ -287,57 +234,46 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Subdivision and Beat Controls with live update indicators */}
-        <div className="relative">
-          <Controls 
-            state={state}
-            onBeatsChange={actions.setBeatsPerMeasure}
-            onSubdivisionsChange={actions.setSubdivisions}
-          />
-          {/* Live update indicators for subdivisions */}
-          {(state.isPlaying || state.isPaused) && (
-            <div className="absolute -top-1 right-4 flex space-x-2">
-              <div className="w-1 h-1 bg-green-400 rounded-full animate-pulse" />
-              <div className="w-1 h-1 bg-green-400 rounded-full animate-pulse" />
-            </div>
-          )}
-        </div>
+        {/* Dropdown Controls for Beats and Subdivisions */}
+        <Controls 
+          state={state}
+          onBeatsChange={actions.setBeatsPerMeasure}
+          onSubdivisionsChange={actions.setSubdivisions}
+        />
 
-        {/* Play/Pause/Resume Button */}
+        {/* Play/Stop Button - Accent Color */}
         <div className="flex justify-center">
           <PlayStopButton state={state} onToggle={actions.toggle} isInitialized={isInitialized} />
         </div>
 
-        {/* Feature checkboxes (placeholder) */}
+        {/* Checkboxes - schwarz-weiß Design */}
         <div className="flex justify-center space-x-8">
-          <label className="flex items-center space-x-3 cursor-pointer opacity-50">
+          <label className="flex items-center space-x-3 cursor-pointer">
             <input 
               type="checkbox"
-              disabled
               className="w-4 h-4 bg-black border-2 border-white rounded appearance-none checked:bg-white checked:border-white
-                       focus:outline-none focus:ring-0 cursor-not-allowed"
+                       focus:outline-none focus:ring-0 cursor-pointer"
             />
-            <span className="text-white/40 text-sm">Tempo-Trainer</span>
+            <span className="text-white/70 text-sm">Tempo-Trainer</span>
           </label>
-          <label className="flex items-center space-x-3 cursor-pointer opacity-50">
+          <label className="flex items-center space-x-3 cursor-pointer">
             <input 
               type="checkbox"
-              disabled
               className="w-4 h-4 bg-black border-2 border-white rounded appearance-none checked:bg-white checked:border-white
-                       focus:outline-none focus:ring-0 cursor-not-allowed"
+                       focus:outline-none focus:ring-0 cursor-pointer"
             />
-            <span className="text-white/40 text-sm">Gap-Trainer</span>
+            <span className="text-white/70 text-sm">Gap-Trainer</span>
           </label>
         </div>
       </div>
 
-      {/* Bottom Controls with enhanced STOP button */}
+      {/* Bottom Controls - schwarz-weiß Design */}
       <div className="fixed bottom-0 left-0 right-0 bg-black border-t border-white/10 p-4">
-        <div className="flex justify-center items-center space-x-6">
+        <div className="flex justify-center items-center space-x-8">
           <button 
             className="px-4 py-2 border-2 border-white bg-black text-white/60 rounded-full text-sm
-                     hover:bg-white hover:text-black transition-colors opacity-50 cursor-not-allowed"
-            disabled={true}
+                     hover:bg-white hover:text-black transition-colors"
+            disabled={!isInitialized}
           >
             🔊 Shaker
           </button>
@@ -357,10 +293,10 @@ export default function HomePage() {
           
           <button 
             onClick={actions.stop}
-            disabled={!isInitialized || (!state.isPlaying && !state.isPaused)}
-            className="px-4 py-2 border-2 border-red-500 bg-black text-red-500 rounded-full text-sm font-bold
-                     hover:bg-red-500 hover:text-black transition-all duration-150
-                     disabled:opacity-30 disabled:cursor-not-allowed disabled:border-white disabled:text-white"
+            disabled={!isInitialized || !state.isPlaying}
+            className="px-4 py-2 border-2 border-white bg-black text-white rounded-full text-sm font-bold
+                     hover:bg-white hover:text-black transition-all duration-150
+                     disabled:opacity-30 disabled:cursor-not-allowed"
           >
             ● STOP
           </button>
