@@ -80,10 +80,12 @@ function PlayStopButton({ state, onToggle, isInitialized }: {
       onClick={onToggle}
       disabled={!isInitialized}
       title={getButtonLabel()}
+      aria-label={getButtonLabel() + " metronome"}
+      aria-pressed={isPlaying && !isPaused}
       className={`w-24 h-24 border-4 ${colors.border} bg-black rounded-full 
                  hover:scale-110 active:scale-95 transition-all duration-200
                  flex items-center justify-center shadow-lg ${colors.shadow}
-                 disabled:opacity-50 disabled:cursor-not-allowed`}
+                 disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-white/30`}
     >
       {getButtonContent()}
     </button>
@@ -94,6 +96,34 @@ export default function HomePage() {
   const { state, isInitialized, error, actions } = useMetronome();
   const [showSettings, setShowSettings] = useState(false);
   const [tapTimes, setTapTimes] = useState<number[]>([]);
+
+  // Keyboard navigation support
+  const handleKeyPress = (event: React.KeyboardEvent) => {
+    if (!isInitialized) return;
+    
+    switch (event.code) {
+      case 'Space':
+        event.preventDefault();
+        actions.toggle();
+        break;
+      case 'Escape':
+        event.preventDefault();
+        actions.stop();
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        actions.setBPM(Math.min(300, state.bpm + (event.shiftKey ? 10 : 1)));
+        break;
+      case 'ArrowDown':
+        event.preventDefault();
+        actions.setBPM(Math.max(40, state.bpm - (event.shiftKey ? 10 : 1)));
+        break;
+      case 'Enter':
+        event.preventDefault();
+        handleTap();
+        break;
+    }
+  };
 
   const handleInitialize = async () => {
     try {
@@ -176,13 +206,42 @@ export default function HomePage() {
           <p className="text-xs text-white/40 mt-4">
             Tap to enable audio and start the metronome
           </p>
+          <div className="sr-only">
+            <h2>Keyboard Controls</h2>
+            <ul>
+              <li>Space: Play/Pause metronome</li>
+              <li>Escape: Stop metronome</li>
+              <li>Up/Down arrows: Adjust BPM by 1 (Hold Shift for 10)</li>
+              <li>Enter: Tap tempo</li>
+              <li>Tab: Navigate between controls</li>
+            </ul>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col relative">
+    <div 
+      className="min-h-screen bg-black text-white flex flex-col relative focus:outline-none"
+      tabIndex={0}
+      onKeyDown={handleKeyPress}
+      role="application"
+      aria-label="Professional Metronome Application"
+    >
+      {/* Screen reader live region for status updates */}
+      <div 
+        className="sr-only"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {state.isPlaying 
+          ? `Metronome playing at ${state.bpm} BPM, beat ${state.currentBeat} of ${state.beatsPerMeasure}`
+          : state.isPaused
+          ? `Metronome paused at ${state.bpm} BPM, beat ${state.currentBeat} of ${state.beatsPerMeasure}`
+          : `Metronome stopped at ${state.bpm} BPM`
+        }
+      </div>
       {/* Clean header */}
       <header className="flex items-center justify-center p-4 border-b border-white/10 relative">
         <h1 className="text-2xl font-bold text-white">Metronome Pro</h1>
@@ -203,34 +262,40 @@ export default function HomePage() {
         </div>
 
         {/* BPM Control with live update indicator */}
-        <div className="flex items-center justify-center space-x-6">
-          {/* Left Controls */}
-          <div className="flex flex-col items-center space-x-0 space-y-2">
+        <div className="flex items-center justify-center space-x-4 md:space-x-6">
+          {/* Left Controls - Mobile Touch Optimized */}
+          <div className="flex flex-col items-center space-x-0 space-y-3">
             <button
               onClick={() => actions.setBPM(Math.max(40, state.bpm - 5))}
               disabled={!isInitialized || state.bpm <= 40}
-              className="w-12 h-12 rounded-full border-2 border-white bg-black text-white font-bold text-sm
+              aria-label="Decrease BPM by 5"
+              className="w-14 h-14 rounded-full border-2 border-white bg-black text-white font-bold text-sm
                        hover:bg-white hover:text-black active:scale-95 transition-all duration-150
-                       disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:text-white"
+                       disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:text-white
+                       md:w-12 md:h-12"
             >
               -5
             </button>
             <button
               onClick={() => actions.setBPM(Math.max(40, state.bpm - 1))}
               disabled={!isInitialized || state.bpm <= 40}
-              className="w-12 h-12 rounded-full border-2 border-white bg-black text-white font-bold text-sm
+              aria-label="Decrease BPM by 1"
+              className="w-14 h-14 rounded-full border-2 border-white bg-black text-white font-bold text-sm
                        hover:bg-white hover:text-black active:scale-95 transition-all duration-150
-                       disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:text-white"
+                       disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:text-white
+                       md:w-12 md:h-12"
             >
               -1
             </button>
           </div>
 
-          {/* Central BPM Display */}
+          {/* Central BPM Display - Mobile Optimized */}
           <div className="flex flex-col items-center">
             <div className="text-center mb-2 relative">
               <input
                 type="number"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={state.bpm}
                 onChange={(e) => {
                   const value = parseInt(e.target.value);
@@ -242,10 +307,13 @@ export default function HomePage() {
                 disabled={!isInitialized}
                 min={40}
                 max={300}
-                className="w-32 h-20 text-6xl font-mono font-bold text-center 
-                         bg-transparent border-none text-white outline-none
+                aria-label="Beats per minute"
+                className="w-40 h-24 text-6xl font-mono font-bold text-center 
+                         bg-transparent border-2 border-transparent text-white outline-none
+                         touch-none focus:border-white/30 rounded-lg px-2
                          disabled:opacity-50 disabled:cursor-not-allowed
-                         [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                         [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
+                         md:w-32 md:h-20 md:border-none"
               />
               {/* Live update indicator */}
               {(state.isPlaying || state.isPaused) && (
@@ -256,23 +324,27 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Right Controls */}
-          <div className="flex flex-col items-center space-x-0 space-y-2">
+          {/* Right Controls - Mobile Touch Optimized */}
+          <div className="flex flex-col items-center space-x-0 space-y-3">
             <button
               onClick={() => actions.setBPM(Math.min(300, state.bpm + 5))}
               disabled={!isInitialized || state.bpm >= 300}
-              className="w-12 h-12 rounded-full border-2 border-white bg-black text-white font-bold text-sm
+              aria-label="Increase BPM by 5"
+              className="w-14 h-14 rounded-full border-2 border-white bg-black text-white font-bold text-sm
                        hover:bg-white hover:text-black active:scale-95 transition-all duration-150
-                       disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:text-white"
+                       disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:text-white
+                       md:w-12 md:h-12"
             >
               +5
             </button>
             <button
               onClick={() => actions.setBPM(Math.min(300, state.bpm + 1))}
               disabled={!isInitialized || state.bpm >= 300}
-              className="w-12 h-12 rounded-full border-2 border-white bg-black text-white font-bold text-sm
+              aria-label="Increase BPM by 1"
+              className="w-14 h-14 rounded-full border-2 border-white bg-black text-white font-bold text-sm
                        hover:bg-white hover:text-black active:scale-95 transition-all duration-150
-                       disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:text-white"
+                       disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black disabled:hover:text-white
+                       md:w-12 md:h-12"
             >
               +1
             </button>
@@ -300,43 +372,16 @@ export default function HomePage() {
           <PlayStopButton state={state} onToggle={actions.toggle} isInitialized={isInitialized} />
         </div>
 
-        {/* Feature checkboxes (placeholder) */}
-        <div className="flex justify-center space-x-8">
-          <label className="flex items-center space-x-3 cursor-pointer opacity-50">
-            <input 
-              type="checkbox"
-              disabled
-              className="w-4 h-4 bg-black border-2 border-white rounded appearance-none checked:bg-white checked:border-white
-                       focus:outline-none focus:ring-0 cursor-not-allowed"
-            />
-            <span className="text-white/40 text-sm">Tempo-Trainer</span>
-          </label>
-          <label className="flex items-center space-x-3 cursor-pointer opacity-50">
-            <input 
-              type="checkbox"
-              disabled
-              className="w-4 h-4 bg-black border-2 border-white rounded appearance-none checked:bg-white checked:border-white
-                       focus:outline-none focus:ring-0 cursor-not-allowed"
-            />
-            <span className="text-white/40 text-sm">Gap-Trainer</span>
-          </label>
-        </div>
+        {/* Clean UI - removed placeholder features */}
       </div>
 
-      {/* Bottom Controls with enhanced STOP button */}
+      {/* Bottom Controls - Clean Design */}
       <div className="fixed bottom-0 left-0 right-0 bg-black border-t border-white/10 p-4">
-        <div className="flex justify-center items-center space-x-6">
-          <button 
-            className="px-4 py-2 border-2 border-white bg-black text-white/60 rounded-full text-sm
-                     hover:bg-white hover:text-black transition-colors opacity-50 cursor-not-allowed"
-            disabled={true}
-          >
-            🔊 Shaker
-          </button>
-          
+        <div className="flex justify-center items-center space-x-8">          
           <button
             onClick={handleTap}
             disabled={!isInitialized}
+            aria-label="Tap tempo to set BPM"
             className="px-8 py-3 border-2 border-white bg-black text-white font-bold text-lg rounded-full
                      hover:bg-white hover:text-black active:scale-95 transition-all duration-150
                      shadow-lg shadow-white/30 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -350,6 +395,7 @@ export default function HomePage() {
           <button 
             onClick={actions.stop}
             disabled={!isInitialized || (!state.isPlaying && !state.isPaused)}
+            aria-label="Stop metronome"
             className="px-4 py-2 border-2 border-red-500 bg-black text-red-500 rounded-full text-sm font-bold
                      hover:bg-red-500 hover:text-black transition-all duration-150
                      disabled:opacity-30 disabled:cursor-not-allowed disabled:border-white disabled:text-white"

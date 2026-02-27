@@ -27,8 +27,9 @@ export default function Controls({ state, onBeatsChange, onSubdivisionsChange }:
           <select 
             value={beatsPerMeasure}
             onChange={(e) => onBeatsChange(parseInt(e.target.value))}
+            aria-label="Number of beats per measure"
             className="bg-black border-2 border-white text-white px-6 py-3 pr-12 rounded-lg
-                     appearance-none focus:outline-none focus:border-white focus:bg-black
+                     appearance-none focus:outline-none focus:border-white focus:bg-black focus:ring-2 focus:ring-white/30
                      text-lg font-bold min-w-[100px] cursor-pointer
                      hover:border-white/70 transition-colors"
           >
@@ -53,8 +54,9 @@ export default function Controls({ state, onBeatsChange, onSubdivisionsChange }:
           <select 
             value={subdivisions}
             onChange={(e) => onSubdivisionsChange(parseInt(e.target.value))}
+            aria-label="Number of subdivisions per beat"
             className="bg-black border-2 border-white text-white px-6 py-3 pr-12 rounded-lg
-                     appearance-none focus:outline-none focus:border-white focus:bg-black
+                     appearance-none focus:outline-none focus:border-white focus:bg-black focus:ring-2 focus:ring-white/30
                      text-lg font-bold min-w-[100px] cursor-pointer
                      hover:border-white/70 transition-colors"
           >

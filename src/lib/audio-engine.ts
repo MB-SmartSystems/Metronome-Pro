@@ -7,6 +7,9 @@ export class AudioEngine {
   private isWarmedUp = false;
   private activeSources: Set<AudioBufferSourceNode> = new Set();
   private masterGain: GainNode;
+  private retryCount = 0;
+  private maxRetries = 5;
+  private retryDelay = 100; // Start with 100ms
   
   constructor() {
     // Samsung S23 and high-end device optimization
@@ -33,18 +36,52 @@ export class AudioEngine {
   }
 
   async initialize(): Promise<void> {
-    // Force AudioContext to ready state
-    if (this.audioContext.state === 'suspended') {
-      await this.audioContext.resume();
+    return this.initializeWithRetry();
+  }
+
+  private async initializeWithRetry(): Promise<void> {
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        // Force AudioContext to ready state
+        if (this.audioContext.state === 'suspended') {
+          await this.audioContext.resume();
+        }
+        
+        // Create audio buffer pool
+        this.bufferPool = await this.createAudioBuffers();
+        
+        // CRITICAL: Warm up audio pipeline
+        await this.warmUpAudioPipeline();
+        
+        this.isWarmedUp = true;
+        this.retryCount = 0; // Reset on success
+        return;
+        
+      } catch (error) {
+        console.warn(`Audio initialization attempt ${attempt + 1} failed:`, error);
+        
+        if (attempt === this.maxRetries) {
+          throw new Error(`Audio initialization failed after ${this.maxRetries + 1} attempts: ${error}`);
+        }
+        
+        // Exponential backoff with jitter
+        const delay = this.retryDelay * Math.pow(2, attempt) + Math.random() * 100;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        // Try to recreate AudioContext if necessary
+        if (this.audioContext.state === 'closed') {
+          this.audioContext = new AudioContext({
+            sampleRate: this.config.sampleRate,
+            latencyHint: 'interactive',
+          });
+          
+          // Recreate master gain
+          this.masterGain = this.audioContext.createGain();
+          this.masterGain.gain.value = 1.0;
+          this.masterGain.connect(this.audioContext.destination);
+        }
+      }
     }
-    
-    // Create audio buffer pool
-    this.bufferPool = await this.createAudioBuffers();
-    
-    // CRITICAL: Warm up audio pipeline
-    await this.warmUpAudioPipeline();
-    
-    this.isWarmedUp = true;
   }
 
   private async warmUpAudioPipeline(): Promise<void> {
@@ -248,16 +285,32 @@ export class AudioEngine {
       const isReady = this.audioContext.state === 'running' && this.isWarmedUp;
       
       if (!isReady) {
-        console.error('Audio not ready:', {
+        console.warn('Audio not ready, attempting automatic recovery...', {
           state: this.audioContext.state,
           warmedUp: this.isWarmedUp
         });
+        
+        // Attempt automatic recovery
+        try {
+          await this.initializeWithRetry();
+          return this.audioContext.state === 'running' && this.isWarmedUp;
+        } catch (recoveryError) {
+          console.error('Audio recovery failed:', recoveryError);
+          return false;
+        }
       }
       
       return isReady;
     } catch (error) {
       console.error('Audio readiness check failed:', error);
-      return false;
+      // Try one automatic recovery attempt
+      try {
+        await this.initializeWithRetry();
+        return this.audioContext.state === 'running' && this.isWarmedUp;
+      } catch (recoveryError) {
+        console.error('Audio recovery failed:', recoveryError);
+        return false;
+      }
     }
   }
 

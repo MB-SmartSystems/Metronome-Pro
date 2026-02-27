@@ -61,7 +61,7 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
     const isCurrentBeat = beatNumber === currentBeat && (isPlaying || isPaused);
     const beatLevel = beatPattern[beatIndex] || 'normal';
     
-    // Visual states with proper pause indication
+    // Visual states with clear beat level encoding (accent/normal/muted)
     const getVisualState = () => {
       if (isCurrentBeat) {
         if (isPaused) {
@@ -71,7 +71,7 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
           } else if (beatLevel === 'normal') {
             return 'bg-white border-white shadow-white/50 shadow-lg scale-110';
           } else {
-            return 'bg-black border-white scale-110';
+            return 'bg-black border-white border-dashed scale-110';
           }
         } else if (isPlaying) {
           // Playing state - animated
@@ -80,21 +80,28 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
           } else if (beatLevel === 'normal') {
             return 'bg-white border-white shadow-white/50 shadow-lg animate-pulse scale-110';
           } else {
-            return 'bg-black border-white animate-pulse scale-110';
+            return 'bg-black border-white border-dashed animate-pulse scale-110';
           }
         }
       }
       
-      // Inactive beat - clean white ring
-      return 'bg-transparent border-white/50';
+      // Inactive beat - show beat level with visual hierarchy
+      if (beatLevel === 'accent') {
+        return `bg-transparent ${colors.border} border-2`;
+      } else if (beatLevel === 'normal') {
+        return 'bg-transparent border-white border-2';
+      } else {
+        return 'bg-transparent border-white/40 border-2 border-dashed';
+      }
     };
 
     const getTextColor = () => {
-      if (isCurrentBeat && (beatLevel === 'accent' || beatLevel === 'normal') && !isPaused) {
+      if (isCurrentBeat && (beatLevel === 'accent' || beatLevel === 'normal')) {
         return 'text-black';
       }
-      if (isCurrentBeat && isPaused && (beatLevel === 'accent' || beatLevel === 'normal')) {
-        return 'text-black';
+      // Show visual differentiation for muted beats
+      if (beatLevel === 'muted') {
+        return 'text-white/40';
       }
       return 'text-white/70';
     };
@@ -103,9 +110,13 @@ export default function MetronomeDisplay({ state, onBeatClick, onColorChange, sh
       <button
         key={beatNumber}
         onClick={() => onBeatClick(beatIndex)}
+        aria-label={`Beat ${beatNumber}: ${beatLevel}${isCurrentBeat ? ' - currently active' : ''}`}
+        aria-pressed={beatLevel === 'accent'}
+        tabIndex={0}
         className={`
           relative w-12 h-12 rounded-full border-3 cursor-pointer
           hover:scale-105 active:scale-95 hover:border-white/80
+          focus:ring-2 focus:ring-white/30 focus:outline-none
           ${isCurrentBeat ? 'transition-all duration-75' : 'transition-all duration-150'}
           ${getVisualState()}
         `}
