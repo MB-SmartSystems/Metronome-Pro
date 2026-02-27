@@ -1,0 +1,209 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS Custom Properties */
+:root {
+  --font-inter: Inter, system-ui, sans-serif;
+  --font-jetbrains-mono: 'JetBrains Mono', monospace;
+}
+
+/* Base styles */
+@layer base {
+  html {
+    @apply h-full;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  
+  body {
+    @apply h-full m-0 p-0 overflow-x-hidden;
+    font-family: var(--font-inter);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Prevent zoom on input focus (iOS Safari) */
+  input, select, textarea {
+    font-size: 16px;
+  }
+
+  /* Custom scrollbar for webkit browsers */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-metronom-surface;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-metronom-muted rounded;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-metronom-primary;
+  }
+}
+
+/* Component styles */
+@layer components {
+  /* Custom slider styles */
+  .slider::-webkit-slider-thumb {
+    appearance: none;
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    background: #22c55e;
+    cursor: pointer;
+    border: 2px solid #0a0a0a;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+  }
+
+  .slider::-moz-range-thumb {
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    background: #22c55e;
+    cursor: pointer;
+    border: 2px solid #0a0a0a;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+  }
+
+  /* Button active states for mobile */
+  button:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+
+  /* Focus styles for accessibility */
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible {
+    outline: 2px solid #22c55e;
+    outline-offset: 2px;
+  }
+}
+
+/* Utility classes */
+@layer utilities {
+  /* Disable text selection */
+  .no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+
+  /* Safe area for devices with notches */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Touch-friendly minimum target sizes for mobile */
+  .touch-target {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  /* High contrast mode support */
+  @media (prefers-contrast: high) {
+    .metronom-surface {
+      border: 1px solid currentColor;
+    }
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-pulse-beat,
+    .animate-flash,
+    .animate-pulse {
+      animation: none;
+    }
+    
+    * {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Custom animations */
+@keyframes pulse-beat {
+  0%, 100% { 
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% { 
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+@keyframes flash {
+  0%, 100% { 
+    opacity: 1;
+  }
+  50% { 
+    opacity: 0.3;
+  }
+}
+
+/* PWA specific styles */
+@media (display-mode: standalone) {
+  body {
+    /* Adjust for standalone app */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Dark mode improvements for OLED screens */
+@media (prefers-color-scheme: dark) {
+  html {
+    color-scheme: dark;
+  }
+  
+  /* True black for OLED */
+  .metronom-bg {
+    background-color: #000000;
+  }
+}
+
+/* Force black background always */
+body {
+  background-color: #000000 !important;
+}
+
+/* DrumTempo style button animations */
+@keyframes beat-pulse {
+  0% { 
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.3);
+  }
+  50% { 
+    transform: scale(1.1);
+    box-shadow: 0 0 20px 5px rgba(255, 255, 255, 0.1);
+  }
+  100% { 
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+}

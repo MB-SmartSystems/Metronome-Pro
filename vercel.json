@@ -1,0 +1,57 @@
+{
+  "name": "metronom-pro",
+  "version": 2,
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_APP_NAME": "Metronom Pro",
+      "NEXT_PUBLIC_APP_VERSION": "1.0.0"
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cross-Origin-Embedder-Policy",
+          "value": "require-corp"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "microphone=(), camera=(), geolocation=()"
+        }
+      ]
+    },
+    {
+      "source": "/manifest.json",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/javascript"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/service-worker.js",
+      "destination": "/sw.js"
+    }
+  ]
+}
